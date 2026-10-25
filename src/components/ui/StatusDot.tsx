@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-type Status = "offline" | "starting" | "online" | "error";
+export type Status = "offline" | "starting" | "online" | "error";
 
 const styles: Record<Status, string> = {
   offline: "border border-line-strong bg-transparent",

@@ -1,22 +1,39 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="OnionHoster">
   <rect x="64" y="64" width="896" height="896" rx="216" fill="#0A0A0A"/>
-  <path
-    d="M512 174C512 174 438 212 398 288C352 376 334 478 364 580C394 682 456 772 512 828C568 772 630 682 660 580C690 478 672 376 626 288C586 212 512 174 512 174Z"
-    fill="#F5F5F5"
-  />
-  <path
-    d="M512 252C512 252 468 296 446 352C418 424 410 500 432 570C452 638 486 700 512 734C538 700 572 638 592 570C614 500 606 424 578 352C556 296 512 252 512 252Z"
-    fill="#0A0A0A"
-  />
-  <path
-    d="M512 336C512 336 492 366 480 404C464 452 462 500 474 544C486 588 502 620 512 638C522 620 538 588 550 544C562 500 560 452 544 404C532 366 512 336 512 336Z"
-    fill="#F5F5F5"
-  />
-  <path
-    d="M512 174C520 136 548 110 586 102"
-    fill="none"
-    stroke="#F5F5F5"
-    stroke-width="26"
-    stroke-linecap="round"
-  />
+  <g transform="translate(0 36)">
+    <!-- bulb -->
+    <path
+      d="M512 190C540 250 590 290 650 350C730 430 760 520 740 610C720 710 640 790 512 806C384 790 304 710 284 610C264 520 294 430 374 350C434 290 484 250 512 190Z"
+      fill="#F5F5F5"
+    />
+    <!-- layer lines -->
+    <g fill="none" stroke="#0A0A0A" stroke-width="14" stroke-linecap="round">
+      <path d="M512 232C420 332 360 450 372 590C382 690 440 770 512 806"/>
+      <path d="M512 232C604 332 664 450 652 590C642 690 584 770 512 806"/>
+      <path d="M512 262C466 350 436 460 446 580C454 670 486 750 512 800"/>
+      <path d="M512 262C558 350 588 460 578 580C570 670 538 750 512 800"/>
+      <path d="M512 306C500 400 498 520 512 790"/>
+    </g>
+    <!-- sprout -->
+    <path
+      d="M512 200C512 152 530 118 568 98"
+      fill="none"
+      stroke="#F5F5F5"
+      stroke-width="26"
+      stroke-linecap="round"
+    />
+    <path
+      d="M506 214C492 180 470 160 440 150"
+      fill="none"
+      stroke="#F5F5F5"
+      stroke-width="18"
+      stroke-linecap="round"
+    />
+    <!-- roots -->
+    <g fill="none" stroke="#F5F5F5" stroke-width="12" stroke-linecap="round">
+      <path d="M512 806V850"/>
+      <path d="M488 802C480 826 468 842 452 856"/>
+      <path d="M536 802C544 826 556 842 572 856"/>
+    </g>
+  </g>
 </svg>

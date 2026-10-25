@@ -9,9 +9,12 @@ import {
 } from "lucide-react";
 import { OnionMark } from "@/components/brand/OnionMark";
 import { Button } from "@/components/ui/Button";
+import { ProgressBar } from "@/components/ui/ProgressBar";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { APP_VERSION } from "@/lib/app";
+import { torLabel, torSummary, torTone } from "@/lib/tor";
 import { cn } from "@/lib/utils";
+import { useTorStore } from "@/stores/tor";
 import type { Theme, View } from "@/types";
 
 const navigation: { id: View; label: string; icon: LucideIcon }[] = [
@@ -32,6 +35,15 @@ export function Sidebar({
   theme: Theme;
   onToggleTheme: () => void;
 }) {
+  const status = useTorStore((state) => state.status);
+  const busy = useTorStore((state) => state.busy);
+  const startTor = useTorStore((state) => state.start);
+  const stopTor = useTorStore((state) => state.stop);
+  const running =
+    status.state === "starting" ||
+    status.state === "bootstrapping" ||
+    status.state === "ready";
+
   return (
     <aside className="flex w-[248px] shrink-0 flex-col border-r border-line bg-surface">
       <div className="flex h-16 items-center gap-2.5 border-b border-line px-5">
@@ -76,12 +88,31 @@ export function Sidebar({
 
       <div className="mt-auto space-y-2 p-3">
         <div className="rounded-lg border border-line bg-bg p-3">
-          <div className="flex items-center gap-2">
-            <StatusDot status="offline" />
-            <span className="text-xs font-medium text-ink">Tor is stopped</span>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <StatusDot
+                status={torTone(status)}
+                className={torTone(status) === "starting" ? "animate-pulse" : undefined}
+              />
+              <span className="truncate text-xs font-medium text-ink">
+                {torLabel(status)}
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-1.5 text-[10px]"
+              disabled={busy}
+              onClick={() => void (running ? stopTor() : startTor())}
+            >
+              {running ? "Stop" : "Start"}
+            </Button>
           </div>
-          <p className="mt-1.5 text-[11px] leading-4 text-faint">
-            Runtime setup starts in the next step.
+          {status.state === "starting" || status.state === "bootstrapping" ? (
+            <ProgressBar value={status.bootstrap} className="mt-2" />
+          ) : null}
+          <p className="mt-1.5 line-clamp-2 text-[11px] leading-4 text-faint">
+            {torSummary(status)}
           </p>
         </div>
 

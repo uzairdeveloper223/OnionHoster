@@ -1,6 +1,68 @@
+mod default_page;
+mod proxy;
+mod services;
+mod static_server;
+mod stats;
+mod tor;
+
+use services::ServiceManager;
+use std::sync::Arc;
+use tauri::{Listener, Manager};
+use tor::TorManager;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let manager = Arc::new(TorManager::new());
+    let shutdown_manager = manager.clone();
+    let listener_manager = manager.clone();
+
     tauri::Builder::default()
-        .run(tauri::generate_context!())
-        .expect("error while running OnionHoster");
+        .plugin(tauri_plugin_dialog::init())
+        .setup(move |app| {
+            if let Some(window) = app.get_webview_window("main")
+                && let Some(icon) = app.default_window_icon()
+            {
+                let _ = window.set_icon(icon.clone());
+            }
+
+            let services =
+                Arc::new(ServiceManager::new(app.handle()).map_err(std::io::Error::other)?);
+            app.manage(services.clone());
+
+            let handle = app.handle().clone();
+            let service_manager = services.clone();
+            let tor_manager = listener_manager.clone();
+            app.listen("tor-status", move |_event| {
+                let handle = handle.clone();
+                let services = service_manager.clone();
+                let tor = tor_manager.clone();
+                tauri::async_runtime::spawn(async move {
+                    services.sync(&handle, &tor).await;
+                });
+            });
+
+            Ok(())
+        })
+        .manage(manager)
+        .invoke_handler(tauri::generate_handler![
+            tor::get_tor_status,
+            tor::get_tor_logs,
+            tor::start_tor,
+            tor::stop_tor,
+            services::get_services,
+            services::create_service,
+            services::update_service,
+            services::delete_service,
+            services::start_service,
+            services::stop_service,
+            services::restart_service,
+        ])
+        .build(tauri::generate_context!())
+        .expect("error while building OnionHoster")
+        .run(move |app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                app.state::<Arc<ServiceManager>>().shutdown_all();
+                let _ = shutdown_manager.stop(None);
+            }
+        });
 }

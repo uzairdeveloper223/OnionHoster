@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=OnionHoster
+GenericName=Tor service host
+Comment=Host local sites and TCP services on Tor.
+Exec=onionhoster
+Icon=onionhoster
+Terminal=false
+StartupWMClass=dev.uzair.onionhoster
+Categories=Network;Utility;
+NoDisplay=true

@@ -11,6 +11,7 @@
   },
   "app": {
     "withGlobalTauri": false,
+    "enableGTKAppId": true,
     "windows": [
       {
         "label": "main",
@@ -32,7 +33,7 @@
   "bundle": {
     "active": true,
     "targets": ["deb", "appimage"],
-    "category": "Network",
+    "category": "Utility",
     "publisher": "Uzair",
     "copyright": "Copyright (C) 2026 Uzair",
     "shortDescription": "Host local sites and TCP services on Tor.",
@@ -45,6 +46,26 @@
       "icons/icon.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": ["resources/tor"],
+    "linux": {
+      "appimage": {
+        "files": {
+          "/usr/share/applications/dev.uzair.onionhoster.desktop": "linux/dev.uzair.onionhoster.desktop"
+        }
+      },
+      "deb": {
+        "desktopTemplate": "linux/onionhoster.desktop",
+        "files": {
+          "/usr/share/applications/dev.uzair.onionhoster.desktop": "linux/dev.uzair.onionhoster.desktop"
+        }
+      },
+      "rpm": {
+        "desktopTemplate": "linux/onionhoster.desktop",
+        "files": {
+          "/usr/share/applications/dev.uzair.onionhoster.desktop": "linux/dev.uzair.onionhoster.desktop"
+        }
+      }
+    }
   }
 }
