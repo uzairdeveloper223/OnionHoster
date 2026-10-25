@@ -8,6 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "fetch:tor": "bash scripts/fetch-tor.sh",
+    "fetch:cloudflared": "bash scripts/fetch-cloudflared.sh",
+    "fetch:runtime": "pnpm fetch:tor && pnpm fetch:cloudflared",
     "tauri": "tauri"
   },
   "dependencies": {

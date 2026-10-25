@@ -21,6 +21,19 @@ The exact bundle URL and SHA-256 digest are pinned in `scripts/fetch-tor.sh`. Th
 download is verified against the Tor Browser signing key with fingerprint
 `EF6E286DDA85EA2A4BA7DE684E2C6E8793298290`.
 
+## Bundled cloudflared
+
+The Cloudflare Tunnel client is installed under `src-tauri/resources/cloudflared/`
+and is not stored in Git.
+
+| Component | Version | License | Upstream |
+| --- | --- | --- | --- |
+| cloudflared | 2026.10.3 | Apache-2.0 | https://github.com/cloudflare/cloudflared |
+
+The exact release URL and SHA-256 digest are pinned in
+`scripts/fetch-cloudflared.sh`. cloudflared is used only when the user explicitly
+starts a tunnel. OnionHoster is not affiliated with Cloudflare.
+
 ## Application framework
 
 | Component | License |
@@ -40,4 +53,4 @@ download is verified against the Tor Browser signing key with fingerprint
 
 When distributing OnionHoster binaries, ship this file, the GPL-3.0-or-later license,
 and the corresponding source code. The Tor Expert Bundle's own license files remain in
-the downloaded bundle. No Tor Project, ngrok, or Cloudflare trademark is claimed.
+the downloaded bundle. No Tor Project or Cloudflare trademark is claimed.

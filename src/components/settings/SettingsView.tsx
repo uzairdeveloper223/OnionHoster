@@ -236,7 +236,7 @@ export function SettingsView({
         </div>
 
         <p className="mt-4 border-t border-line pt-4 text-[11px] leading-5 text-faint">
-          OnionHoster is independent and is not affiliated with the Tor Project, ngrok,
+          OnionHoster is independent and is not affiliated with the Tor Project,
           Cloudflare, or any content hosted by its users. You are responsible for the
           services you publish and for complying with applicable laws.
         </p>

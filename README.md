@@ -8,14 +8,15 @@ Status: under active development. Linux preview. No public release yet.
 
 ```bash
 pnpm install
-pnpm fetch:tor
+pnpm fetch:runtime
 pnpm tauri dev
 ```
 
-`pnpm fetch:tor` downloads the pinned Tor Expert Bundle, verifies its SHA-256 digest
-and Tor Browser signature, and installs it into the ignored
-`src-tauri/resources/tor/` directory. It requires `curl`, `gpg`, `tar`, and
-`sha256sum`. The Tor runtime is not committed to Git.
+`pnpm fetch:runtime` downloads the pinned Tor Expert Bundle and cloudflared
+release, verifies their SHA-256 digests (and the Tor Browser signature), and
+installs them into the ignored `src-tauri/resources/tor/` and
+`src-tauri/resources/cloudflared/` directories. It requires `curl`, `gpg`, `tar`,
+and `sha256sum`. The runtime binaries are not committed to Git.
 
 Prerequisites: Node 20+, pnpm 10+, Rust 1.90+, and the Tauri Linux system dependencies. On Ubuntu:
 

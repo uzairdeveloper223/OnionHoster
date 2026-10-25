@@ -7,6 +7,7 @@ import { TunnelsView } from "@/components/tunnels/TunnelsView";
 import { useTheme } from "@/hooks/useTheme";
 import { useServiceStore } from "@/stores/services";
 import { useTorStore } from "@/stores/tor";
+import { useTunnelStore } from "@/stores/tunnels";
 import type { View } from "@/types";
 
 export default function App() {
@@ -14,11 +15,13 @@ export default function App() {
   const { theme, setTheme, toggleTheme } = useTheme();
   const hydrateTor = useTorStore((state) => state.hydrate);
   const hydrateServices = useServiceStore((state) => state.hydrate);
+  const hydrateTunnels = useTunnelStore((state) => state.hydrate);
 
   useEffect(() => {
     void hydrateTor();
     void hydrateServices();
-  }, [hydrateServices, hydrateTor]);
+    void hydrateTunnels();
+  }, [hydrateServices, hydrateTor, hydrateTunnels]);
 
   return (
     <AppShell

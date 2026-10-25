@@ -6,6 +6,7 @@ import { formatLogTime, torLabel, torTone } from "@/lib/tor";
 import { cn } from "@/lib/utils";
 import { useServiceStore } from "@/stores/services";
 import { useTorStore } from "@/stores/tor";
+import { useTunnelStore } from "@/stores/tunnels";
 
 const levelClass: Record<string, string> = {
   error: "font-semibold text-ink",
@@ -15,7 +16,7 @@ const levelClass: Record<string, string> = {
 
 interface CombinedLog {
   key: string;
-  source: "tor" | "service";
+  source: "tor" | "service" | "tunnel";
   sourceName: string | null;
   level: string;
   message: string;
@@ -29,10 +30,14 @@ export function ActivityView() {
   const serviceLogs = useServiceStore((state) => state.logs);
   const services = useServiceStore((state) => state.services);
   const clearServiceLogs = useServiceStore((state) => state.clearLogs);
+  const tunnelLogs = useTunnelStore((state) => state.logs);
+  const tunnels = useTunnelStore((state) => state.tunnels);
+  const clearTunnelLogs = useTunnelStore((state) => state.clearAllLogs);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const logs = useMemo(() => {
     const names = new Map(services.map((service) => [service.id, service.name]));
+    const tunnelNames = new Map(tunnels.map((tunnel) => [tunnel.id, tunnel.name]));
 
     const combined: CombinedLog[] = [
       ...torLogs.map((log) => ({
@@ -51,10 +56,20 @@ export function ActivityView() {
         message: log.message,
         timestampMs: log.timestampMs,
       })),
+      ...Object.values(tunnelLogs)
+        .flat()
+        .map((log) => ({
+          key: `tunnel-${log.id}`,
+          source: "tunnel" as const,
+          sourceName: tunnelNames.get(log.tunnelId) ?? log.tunnelId,
+          level: log.level,
+          message: log.message,
+          timestampMs: log.timestampMs,
+        })),
     ];
 
     return combined.sort((left, right) => left.timestampMs - right.timestampMs);
-  }, [serviceLogs, services, torLogs]);
+  }, [serviceLogs, services, torLogs, tunnelLogs, tunnels]);
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -66,6 +81,7 @@ export function ActivityView() {
   function clearLogs() {
     clearTorLogs();
     clearServiceLogs();
+    clearTunnelLogs();
   }
 
   return (

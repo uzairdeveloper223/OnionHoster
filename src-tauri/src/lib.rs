@@ -4,11 +4,13 @@ mod services;
 mod static_server;
 mod stats;
 mod tor;
+mod tunnels;
 
 use services::ServiceManager;
 use std::sync::Arc;
 use tauri::{Listener, Manager};
 use tor::TorManager;
+use tunnels::TunnelManager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -29,6 +31,10 @@ pub fn run() {
                 Arc::new(ServiceManager::new(app.handle()).map_err(std::io::Error::other)?);
             app.manage(services.clone());
 
+            let tunnels =
+                Arc::new(TunnelManager::new(app.handle()).map_err(std::io::Error::other)?);
+            app.manage(tunnels.clone());
+
             let handle = app.handle().clone();
             let service_manager = services.clone();
             let tor_manager = listener_manager.clone();
@@ -39,6 +45,28 @@ pub fn run() {
                 tauri::async_runtime::spawn(async move {
                     services.sync(&handle, &tor).await;
                 });
+            });
+
+            let tunnel_handle = app.handle().clone();
+            let tunnel_manager = tunnels.clone();
+            app.listen("service-stopped", move |event| {
+                let Ok(stopped) =
+                    serde_json::from_str::<services::ServiceStopped>(event.payload())
+                else {
+                    return;
+                };
+                tunnel_manager.stop_for_service(&tunnel_handle, &stopped.id);
+            });
+
+            let deleted_handle = app.handle().clone();
+            let deleted_manager = tunnels.clone();
+            app.listen("service-deleted", move |event| {
+                let Ok(deleted) =
+                    serde_json::from_str::<services::ServiceDeleted>(event.payload())
+                else {
+                    return;
+                };
+                deleted_manager.delete_for_service(&deleted_handle, &deleted.id);
             });
 
             Ok(())
@@ -56,11 +84,19 @@ pub fn run() {
             services::start_service,
             services::stop_service,
             services::restart_service,
+            tunnels::get_tunnels,
+            tunnels::get_tunnel_logs,
+            tunnels::create_tunnel,
+            tunnels::update_tunnel,
+            tunnels::delete_tunnel,
+            tunnels::start_tunnel,
+            tunnels::stop_tunnel,
         ])
         .build(tauri::generate_context!())
         .expect("error while building OnionHoster")
         .run(move |app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
+                app.state::<Arc<TunnelManager>>().shutdown_all();
                 app.state::<Arc<ServiceManager>>().shutdown_all();
                 let _ = shutdown_manager.stop(None);
             }

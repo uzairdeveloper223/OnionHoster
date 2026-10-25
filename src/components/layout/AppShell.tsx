@@ -10,7 +10,7 @@ const viewMeta: Record<View, { title: string; subtitle: string }> = {
   },
   tunnels: {
     title: "Tunnels",
-    subtitle: "Optional clearnet access through Cloudflare, ngrok, or a custom command.",
+    subtitle: "Optional clearnet access through Cloudflare or a custom command.",
   },
   activity: {
     title: "Activity",

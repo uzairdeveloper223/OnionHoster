@@ -21,6 +21,8 @@ use uuid::Uuid;
 const STATE_VERSION: u32 = 1;
 const EVENT_SERVICE_STATUS: &str = "service-status";
 const EVENT_SERVICE_LOG: &str = "service-log";
+const EVENT_SERVICE_STOPPED: &str = "service-stopped";
+const EVENT_SERVICE_DELETED: &str = "service-deleted";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -156,6 +158,18 @@ pub struct ServiceView {
     pub local_port: Option<u16>,
     pub error: Option<String>,
     pub stats: ServiceStatsView,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceStopped {
+    pub id: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceDeleted {
+    pub id: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -393,6 +407,10 @@ impl ServiceManager {
         }
 
         self.save()?;
+        let _ = app.emit(
+            EVENT_SERVICE_DELETED,
+            ServiceDeleted { id: id.to_string() },
+        );
         self.log(app, id, "info", "Service deleted.");
         Ok(())
     }
@@ -658,6 +676,10 @@ impl ServiceManager {
 
         let view = self.view(id)?;
         let _ = app.emit(EVENT_SERVICE_STATUS, view.clone());
+        let _ = app.emit(
+            EVENT_SERVICE_STOPPED,
+            ServiceStopped { id: id.to_string() },
+        );
         self.log(app, id, "info", "Service stopped.");
         Ok(view)
     }
@@ -692,7 +714,7 @@ impl ServiceManager {
             .collect();
 
         if !tor.is_ready() {
-            self.mark_waiting(&ids);
+            self.mark_waiting(app, &ids);
             return;
         }
 
@@ -713,16 +735,28 @@ impl ServiceManager {
         }
     }
 
-    fn mark_waiting(&self, ids: &[String]) {
-        let mut runtime = self.runtime.lock().expect("service runtime lock poisoned");
-        for id in ids {
-            if let Some(entry) = runtime.get_mut(id) {
-                if let Some(shutdown) = entry.shutdown.take() {
-                    let _ = shutdown.send(());
+    fn mark_waiting(&self, app: &AppHandle, ids: &[String]) {
+        {
+            let mut runtime = self.runtime.lock().expect("service runtime lock poisoned");
+            for id in ids {
+                if let Some(entry) = runtime.get_mut(id) {
+                    if let Some(shutdown) = entry.shutdown.take() {
+                        let _ = shutdown.send(());
+                    }
+                    entry.state = ServiceState::WaitingForTor;
+                    entry.local_port = None;
                 }
-                entry.state = ServiceState::WaitingForTor;
-                entry.local_port = None;
             }
+        }
+
+        for id in ids {
+            if let Ok(view) = self.view(id) {
+                let _ = app.emit(EVENT_SERVICE_STATUS, view);
+            }
+            let _ = app.emit(
+                EVENT_SERVICE_STOPPED,
+                ServiceStopped { id: id.clone() },
+            );
         }
     }
 
@@ -784,6 +818,10 @@ impl ServiceManager {
         if let Ok(view) = self.view(id) {
             let _ = app.emit(EVENT_SERVICE_STATUS, view);
         }
+        let _ = app.emit(
+            EVENT_SERVICE_STOPPED,
+            ServiceStopped { id: id.to_string() },
+        );
 
         self.log(app, id, "error", message);
     }
