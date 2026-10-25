@@ -90,7 +90,6 @@ jobs:
             sha256sum \
               deb/*.deb \
               appimage/*.AppImage \
-              appimage/*.AppImage.tar.gz \
               tarball/*.tar.gz
           ) | sed 's#  .*/#  #' > SHA256SUMS.txt
           cat SHA256SUMS.txt
@@ -109,7 +108,7 @@ jobs:
           version = tag.lstrip("v")
           repository = os.environ["GITHUB_REPOSITORY"]
           artifacts = sorted(
-              glob.glob("src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz")
+              glob.glob("src-tauri/target/release/bundle/appimage/*.AppImage")
           )
           if len(artifacts) != 1:
               raise SystemExit(
@@ -146,8 +145,7 @@ jobs:
           path: |
             src-tauri/target/release/bundle/deb/*.deb
             src-tauri/target/release/bundle/appimage/*.AppImage
-            src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz
-            src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz.sig
+            src-tauri/target/release/bundle/appimage/*.AppImage.sig
             src-tauri/target/release/bundle/tarball/*.tar.gz
             SHA256SUMS.txt
             latest.json
@@ -162,8 +160,7 @@ jobs:
           files: |
             src-tauri/target/release/bundle/deb/*.deb
             src-tauri/target/release/bundle/appimage/*.AppImage
-            src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz
-            src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz.sig
+            src-tauri/target/release/bundle/appimage/*.AppImage.sig
             src-tauri/target/release/bundle/tarball/*.tar.gz
             SHA256SUMS.txt
             latest.json
