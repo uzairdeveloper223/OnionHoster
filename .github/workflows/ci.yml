@@ -62,6 +62,11 @@ jobs:
 
       - name: Check formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+      
+      - name: Create runtime placeholders
+        run: |
+          mkdir -p src-tauri/resources/tor src-tauri/resources/cloudflared
+          touch src-tauri/resources/tor/.keep src-tauri/resources/cloudflared/.keep
 
       - name: Run Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml

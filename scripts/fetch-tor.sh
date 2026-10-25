@@ -99,5 +99,5 @@ sha256 ${TOR_SHA256}
 EOF
 
 echo "Installed Tor ${TOR_VERSION} in ${DEST}."
-"${DEST}/tor" --version | head -n 1
+LD_LIBRARY_PATH="${DEST}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" "${DEST}/tor" --version | head -n 1
 "${DEST}/lyrebird" --version 2>&1 | head -n 1
