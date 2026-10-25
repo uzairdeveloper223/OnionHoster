@@ -1,0 +1,38 @@
+# Frontend
+node_modules/
+dist/
+.vite/
+coverage/
+playwright-report/
+test-results/
+
+# Rust
+target/
+src-tauri/target/
+
+# Tauri generated files
+src-tauri/gen/
+
+# Downloaded runtime binaries
+src-tauri/resources/tor/
+src-tauri/resources/cloudflared/
+src-tauri/resources/bin/
+
+# Local environment and secrets
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Logs and operating system files
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.idea/
+.vscode/settings.json
+*.swp
