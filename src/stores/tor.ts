@@ -43,8 +43,35 @@ const defaultStatus: TorStatus = {
 };
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+const BRIDGE_STORAGE_KEY = "onionhoster.tor.bridges";
 let listenersAttached = false;
 let localLogId = 1;
+
+function readBridgeLines() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  try {
+    return window.localStorage.getItem(BRIDGE_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function storeBridgeLines(value: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    if (value) {
+      window.localStorage.setItem(BRIDGE_STORAGE_KEY, value);
+    } else {
+      window.localStorage.removeItem(BRIDGE_STORAGE_KEY);
+    }
+  } catch {
+    // The bridge lines still work for this session if storage is unavailable.
+  }
+}
 
 function parseBridgeLines(value: string) {
   return value
@@ -83,7 +110,7 @@ async function attachListeners() {
 export const useTorStore = create<TorStore>((set, get) => ({
   status: defaultStatus,
   logs: [],
-  bridgeLines: "",
+  bridgeLines: readBridgeLines(),
   hydrated: false,
   busy: false,
 
@@ -114,7 +141,10 @@ export const useTorStore = create<TorStore>((set, get) => ({
     }
   },
 
-  setBridgeLines: (value) => set({ bridgeLines: value }),
+  setBridgeLines: (value) => {
+    storeBridgeLines(value);
+    set({ bridgeLines: value });
+  },
 
   start: async () => {
     if (get().busy) {

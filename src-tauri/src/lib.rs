@@ -1,5 +1,11 @@
+mod backup;
+mod chat_server;
+mod community;
 mod default_page;
+mod file_server;
+mod ports;
 mod proxy;
+mod runtime;
 mod services;
 mod static_server;
 mod stats;
@@ -14,12 +20,15 @@ use tunnels::TunnelManager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
     let manager = Arc::new(TorManager::new());
     let shutdown_manager = manager.clone();
     let listener_manager = manager.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(move |app| {
             if let Some(window) = app.get_webview_window("main")
                 && let Some(icon) = app.default_window_icon()
@@ -50,8 +59,7 @@ pub fn run() {
             let tunnel_handle = app.handle().clone();
             let tunnel_manager = tunnels.clone();
             app.listen("service-stopped", move |event| {
-                let Ok(stopped) =
-                    serde_json::from_str::<services::ServiceStopped>(event.payload())
+                let Ok(stopped) = serde_json::from_str::<services::ServiceStopped>(event.payload())
                 else {
                     return;
                 };
@@ -61,8 +69,7 @@ pub fn run() {
             let deleted_handle = app.handle().clone();
             let deleted_manager = tunnels.clone();
             app.listen("service-deleted", move |event| {
-                let Ok(deleted) =
-                    serde_json::from_str::<services::ServiceDeleted>(event.payload())
+                let Ok(deleted) = serde_json::from_str::<services::ServiceDeleted>(event.payload())
                 else {
                     return;
                 };
@@ -73,6 +80,9 @@ pub fn run() {
         })
         .manage(manager)
         .invoke_handler(tauri::generate_handler![
+            runtime::get_runtime_status,
+            runtime::repair_runtime,
+            ports::detect_local_ports,
             tor::get_tor_status,
             tor::get_tor_logs,
             tor::start_tor,
@@ -91,6 +101,8 @@ pub fn run() {
             tunnels::delete_tunnel,
             tunnels::start_tunnel,
             tunnels::stop_tunnel,
+            backup::export_backup,
+            backup::import_backup,
         ])
         .build(tauri::generate_context!())
         .expect("error while building OnionHoster")

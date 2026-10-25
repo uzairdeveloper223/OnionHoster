@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "OnionHoster",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "identifier": "dev.uzair.onionhoster",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -32,7 +32,10 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "appimage"],
+    "targets": [
+      "deb",
+      "appimage"
+    ],
     "category": "Utility",
     "publisher": "Uzair",
     "copyright": "Copyright (C) 2026 Uzair",
@@ -47,7 +50,10 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["resources/tor", "resources/cloudflared"],
+    "resources": [
+      "resources/tor",
+      "resources/cloudflared"
+    ],
     "linux": {
       "appimage": {
         "files": {
@@ -66,6 +72,16 @@
           "/usr/share/applications/dev.uzair.onionhoster.desktop": "linux/dev.uzair.onionhoster.desktop"
         }
       }
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhDNkE1ODY2NUVGODIxRTEKUldUaElmaGVabGhxakZvdjF2NFZNbzYzMmFWcTB4RGdMejBHWlF1dzBUNndIazRjcnBraTFzWnIK",
+      "endpoints": [
+        "https://github.com/uzairdeveloper223/OnionHoster/releases/latest/download/latest.json"
+      ],
+      "requireSignedVersion": true
     }
   }
 }

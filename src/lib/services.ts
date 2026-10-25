@@ -33,17 +33,41 @@ export interface DefaultPageSource {
   kind: "default_page";
 }
 
+export interface ChatSource {
+  kind: "chat";
+}
+
+export interface FileShareSource {
+  kind: "file_share";
+}
+
 export type ServiceSource =
   | StaticSource
   | ProxySource
   | TcpSource
-  | DefaultPageSource;
+  | DefaultPageSource
+  | ChatSource
+  | FileShareSource;
+
+export const CHAT_MAX_FILE_BYTES = 25 * 1024 * 1024;
+export const CHAT_QUOTA_BYTES = 1024 * 1024 * 1024;
+export const FILE_MAX_BYTES = 50 * 1024 * 1024;
+export const FILE_QUOTA_BYTES = 2 * 1024 * 1024 * 1024;
+
+export interface ClientAuth {
+  name: string;
+  publicKey: string;
+  privateKey: string;
+  createdAt: number;
+}
 
 export interface ServiceOnion {
   virtualPort: number;
   serviceId: string | null;
   pow: boolean;
   maxStreams: number | null;
+  private: boolean;
+  clientAuth: ClientAuth[];
 }
 
 export interface ServiceStats {
@@ -74,6 +98,9 @@ export interface ServiceInput {
   source: ServiceSource;
   virtualPort?: number;
   autostart: boolean;
+  pow?: boolean;
+  maxStreams?: number;
+  private?: boolean;
 }
 
 export interface ServiceLog {
@@ -93,6 +120,10 @@ export function serviceTypeLabel(source: ServiceSource): string {
       return "TCP service";
     case "default_page":
       return "OnionHoster page";
+    case "chat":
+      return "Public chat";
+    case "file_share":
+      return "File sharing";
   }
 }
 
@@ -106,6 +137,10 @@ export function serviceSummary(source: ServiceSource): string {
       return `tcp://${source.host}:${source.port}`;
     case "default_page":
       return "Built-in OnionHoster page";
+    case "chat":
+      return "Public room · 25 MB/file · 1 GB storage";
+    case "file_share":
+      return "Public files · 50 MB/file · 2 GB storage";
   }
 }
 

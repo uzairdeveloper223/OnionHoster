@@ -84,6 +84,7 @@ struct TorInner {
     child: Option<Child>,
     control: Option<TcpStream>,
     stop: Option<Arc<AtomicBool>>,
+    lock: Option<fs::File>,
     active: bool,
     generation: u64,
 }
@@ -102,6 +103,13 @@ pub struct OnionLease {
     pub private_key: Option<String>,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct AddOnionOptions {
+    pub pow: bool,
+    pub max_streams: Option<u16>,
+    pub client_auth: Vec<String>,
+}
+
 impl TorManager {
     pub fn new() -> Self {
         Self {
@@ -109,6 +117,7 @@ impl TorManager {
                 child: None,
                 control: None,
                 stop: None,
+                lock: None,
                 active: false,
                 generation: 0,
             }),
@@ -145,22 +154,13 @@ impl TorManager {
         private_key: Option<&str>,
         virtual_port: u16,
         target: &str,
+        options: &AddOnionOptions,
     ) -> Result<OnionLease, String> {
-        if !(1..=65535).contains(&virtual_port) {
-            return Err("The onion virtual port must be between 1 and 65535.".to_string());
-        }
-        if target.is_empty() || target.chars().any(char::is_whitespace) {
-            return Err("The onion service target is invalid.".to_string());
-        }
-
         let key = private_key.unwrap_or("NEW:ED25519-V3");
-        if key.is_empty() || key.chars().any(char::is_whitespace) {
-            return Err("The onion private key is invalid.".to_string());
-        }
+        let command = build_add_onion_command(key, virtual_port, target, options)?;
 
         let (port, cookie) = self.command_endpoint(app)?;
         let (mut stream, mut reader) = authenticate_control(port, &cookie)?;
-        let command = format!("ADD_ONION {key} Flags=Detach Port={virtual_port},{target}");
         write_command(&mut stream, &command)?;
         let response = read_response(&mut reader)?;
         parse_add_onion_response(&response)
@@ -218,6 +218,7 @@ impl TorManager {
     pub fn start(self: &Arc<Self>, app: AppHandle, config: TorConfig) -> Result<(), String> {
         let generation;
         let stop;
+        let lock_file = RuntimePaths::resolve(&app)?.lock_file;
 
         {
             let mut inner = self.inner.lock().expect("tor state lock poisoned");
@@ -228,6 +229,10 @@ impl TorManager {
             if let Some(mut child) = inner.child.take() {
                 let _ = child.kill();
                 let _ = child.wait();
+            }
+
+            if inner.lock.is_none() {
+                inner.lock = Some(acquire_tor_lock(&lock_file)?);
             }
 
             generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
@@ -248,7 +253,7 @@ impl TorManager {
     }
 
     pub fn stop(&self, app: Option<&AppHandle>) -> Result<(), String> {
-        let (child, control) = {
+        let (child, control, lock) = {
             let mut inner = self.inner.lock().expect("tor state lock poisoned");
 
             if !inner.active && inner.child.is_none() {
@@ -265,8 +270,10 @@ impl TorManager {
                 stop.store(true, Ordering::SeqCst);
             }
 
-            (inner.child.take(), inner.control.take())
+            (inner.child.take(), inner.control.take(), inner.lock.take())
         };
+
+        drop(lock);
 
         if let Some(mut control) = control {
             let _ = control.write_all(b"SIGNAL SHUTDOWN\r\n");
@@ -660,32 +667,12 @@ struct RuntimePaths {
     defaults_torrc: PathBuf,
     control_port_file: PathBuf,
     cookie_file: PathBuf,
+    lock_file: PathBuf,
 }
 
 impl RuntimePaths {
     fn resolve(app: &AppHandle) -> Result<Self, String> {
-        let mut candidates = Vec::new();
-
-        if let Some(dir) = std::env::var_os("ONIONHOSTER_TOR_DIR") {
-            candidates.push(PathBuf::from(dir));
-        }
-        if let Ok(resource_dir) = app.path().resource_dir() {
-            candidates.push(resource_dir.join("tor"));
-            candidates.push(resource_dir.join("resources").join("tor"));
-            candidates.push(resource_dir.join("resources").join("tor").join("tor"));
-        }
-        candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/tor"));
-        candidates.push(PathBuf::from("/usr/lib/onionhoster/tor"));
-        candidates.push(PathBuf::from("/usr/lib/OnionHoster/tor"));
-        candidates.push(PathBuf::from("/usr/share/onionhoster/tor"));
-
-        let tor_dir = candidates
-            .into_iter()
-            .find(|dir| dir.join("tor").is_file() && dir.join("lyrebird").is_file())
-            .ok_or_else(|| {
-                "The bundled Tor runtime was not found. Run `pnpm fetch:tor` in development or reinstall OnionHoster."
-                    .to_string()
-            })?;
+        let tor_dir = crate::runtime::ensure_tor_runtime(app)?;
 
         let base_dir = app
             .path()
@@ -703,6 +690,7 @@ impl RuntimePaths {
             defaults_torrc: base_dir.join("defaults.torrc"),
             control_port_file: base_dir.join("control-port"),
             cookie_file: base_dir.join("data").join("control_auth_cookie"),
+            lock_file: base_dir.join("tor.lock"),
             tor_dir,
         })
     }
@@ -838,6 +826,90 @@ struct ControlConnection {
     reader: BufReader<TcpStream>,
     version: Option<String>,
     bootstrap: Option<(u8, String)>,
+}
+
+fn build_add_onion_command(
+    key: &str,
+    virtual_port: u16,
+    target: &str,
+    options: &AddOnionOptions,
+) -> Result<String, String> {
+    if !(1..=65535).contains(&virtual_port) {
+        return Err("The onion virtual port must be between 1 and 65535.".to_string());
+    }
+    if target.is_empty() || target.chars().any(char::is_whitespace) {
+        return Err("The onion service target is invalid.".to_string());
+    }
+    if key.is_empty() || key.chars().any(char::is_whitespace) {
+        return Err("The onion private key is invalid.".to_string());
+    }
+    for public_key in &options.client_auth {
+        if public_key.len() != 52
+            || !public_key
+                .chars()
+                .all(|character| character.is_ascii_uppercase() || ('2'..='7').contains(&character))
+        {
+            return Err("A client authorization public key is invalid.".to_string());
+        }
+    }
+
+    let max_streams = options.max_streams.filter(|value| *value > 0);
+    let mut flags = vec!["Detach"];
+    if !options.client_auth.is_empty() {
+        flags.push("V3Auth");
+    }
+    if max_streams.is_some() {
+        flags.push("MaxStreamsCloseCircuit");
+    }
+
+    let mut command = format!("ADD_ONION {key} Flags={}", flags.join(","));
+    if let Some(max_streams) = max_streams {
+        command.push_str(&format!(" MaxStreams={max_streams}"));
+    }
+    if options.pow {
+        command.push_str(" PoWDefensesEnabled=1");
+    }
+    command.push_str(&format!(" Port={virtual_port},{target}"));
+    for public_key in &options.client_auth {
+        command.push_str(&format!(" ClientAuthV3={public_key}"));
+    }
+
+    Ok(command)
+}
+
+fn acquire_tor_lock(path: &Path) -> Result<fs::File, String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "Could not create the Tor runtime directory at {}: {error}",
+                parent.display()
+            )
+        })?;
+    }
+
+    let file = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(path)
+        .map_err(|error| format!("Could not open the Tor lock file: {error}"))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
+    }
+
+    file.try_lock().map_err(|error| match error {
+        std::fs::TryLockError::WouldBlock => {
+            "Another OnionHoster instance is already using Tor.".to_string()
+        }
+        std::fs::TryLockError::Error(error) => {
+            format!("Could not lock the Tor runtime: {error}")
+        }
+    })?;
+    Ok(file)
 }
 
 fn wait_for_control(
@@ -1206,6 +1278,7 @@ mod tests {
             defaults_torrc: root.join("defaults.torrc"),
             control_port_file: root.join("control-port"),
             cookie_file: root.join("data/control_auth_cookie"),
+            lock_file: root.join("tor.lock"),
         }
     }
 
@@ -1265,6 +1338,33 @@ mod tests {
     fn rejects_add_onion_response_without_service_id() {
         let response = vec!["250 OK".to_string()];
         assert!(parse_add_onion_response(&response).is_err());
+    }
+
+    #[test]
+    fn builds_add_onion_security_options() {
+        let public_key = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRST";
+        let options = AddOnionOptions {
+            pow: true,
+            max_streams: Some(8),
+            client_auth: vec![public_key.to_string()],
+        };
+        let command = build_add_onion_command("NEW:ED25519-V3", 80, "127.0.0.1:43210", &options)
+            .expect("build command");
+        assert_eq!(
+            command,
+            format!(
+                "ADD_ONION NEW:ED25519-V3 Flags=Detach,V3Auth,MaxStreamsCloseCircuit MaxStreams=8 PoWDefensesEnabled=1 Port=80,127.0.0.1:43210 ClientAuthV3={public_key}"
+            )
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_client_authorization_keys() {
+        let options = AddOnionOptions {
+            client_auth: vec!["not-a-public-key".to_string()],
+            ..Default::default()
+        };
+        assert!(build_add_onion_command("NEW:ED25519-V3", 80, "127.0.0.1:8080", &options).is_err());
     }
 
     #[test]

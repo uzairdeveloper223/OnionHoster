@@ -1,9 +1,11 @@
 [package]
 name = "onionhoster"
-version = "0.1.0"
+version = "1.0.0"
 description = "Host local websites and TCP services on Tor."
 authors = ["Uzair"]
 license = "GPL-3.0-or-later"
+repository = "https://github.com/uzairdeveloper223/OnionHoster"
+homepage = "https://github.com/uzairdeveloper223/OnionHoster#readme"
 edition = "2024"
 
 [lib]
@@ -20,7 +22,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["io"] }
-axum = { version = "0.8", features = ["ws"] }
+axum = { version = "0.8", features = ["ws", "multipart"] }
 hyper = { version = "1", features = ["full"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2", "tokio"] }
 hyper-rustls = { version = "0.27", features = ["http1", "http2", "webpki-roots"] }
@@ -32,6 +34,15 @@ tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 mime_guess = "2"
 percent-encoding = "2"
+age = "0.12"
+rusqlite = { version = "0.41", features = ["bundled"] }
+data-encoding = "2"
+x25519-dalek = { version = "2", features = ["getrandom", "static_secrets"] }
+tauri-plugin-updater = "2.14.0"
+tauri-plugin-process = "2.4.0"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
 
 [profile.release]
 codegen-units = 1

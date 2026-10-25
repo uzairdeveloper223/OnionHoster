@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Topbar } from "@/components/layout/Topbar";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { UpdateBanner } from "@/components/layout/UpdateBanner";
 import type { Theme, View } from "@/types";
 
 const viewMeta: Record<View, { title: string; subtitle: string }> = {
@@ -45,6 +46,7 @@ export function AppShell({
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar title={viewMeta[view].title} subtitle={viewMeta[view].subtitle} />
+        <UpdateBanner />
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>

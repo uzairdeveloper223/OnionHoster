@@ -3,7 +3,9 @@ import {
   CircleAlert,
   FileText,
   FolderOpen,
+  FolderUp,
   Lock,
+  MessagesSquare,
   Plus,
   Server,
   X,
@@ -36,6 +38,16 @@ const serviceTypes = [
     icon: FileText,
     label: "OnionHoster page",
     description: "Serve a built-in page about the project.",
+  },
+  {
+    icon: MessagesSquare,
+    label: "Public chat",
+    description: "One room, anonymous names, and stored history.",
+  },
+  {
+    icon: FolderUp,
+    label: "File sharing",
+    description: "Public uploads, previews, and video streaming.",
   },
 ];
 
@@ -229,8 +241,12 @@ export function ServicesView() {
               Delete “{deleteTarget.name}”?
             </h2>
             <p className="mt-2 text-xs leading-5 text-muted">
-              The service will stop and its saved onion address will be removed. This
-              cannot be undone.
+              The service will stop and its saved onion address will be removed.
+              {deleteTarget.source.kind === "chat" ||
+              deleteTarget.source.kind === "file_share"
+                ? " Its local chat or shared files will also be deleted."
+                : ""}{" "}
+              This cannot be undone.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <Button

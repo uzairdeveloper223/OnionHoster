@@ -37,8 +37,9 @@ const providerCards = [
   },
 ];
 
-export function TunnelsView() {
+export function TunnelsView({ onOpenServices }: { onOpenServices: () => void }) {
   const services = useServiceStore((state) => state.services);
+  const servicesHydrated = useServiceStore((state) => state.hydrated);
   const hydrateServices = useServiceStore((state) => state.hydrate);
   const refreshServices = useServiceStore((state) => state.refresh);
   const tunnels = useTunnelStore((state) => state.tunnels);
@@ -123,7 +124,16 @@ export function TunnelsView() {
             <span className="font-mono text-[10px] text-faint">{running} live</span>
           ) : null}
         </div>
-        <Button size="sm" onClick={openCreate} disabled={!hydrated}>
+        <Button
+          size="sm"
+          onClick={openCreate}
+          disabled={!hydrated || !servicesHydrated || services.length === 0}
+          title={
+            servicesHydrated && services.length === 0
+              ? "Create and start a service first."
+              : undefined
+          }
+        >
           <Plus className="size-3.5" strokeWidth={1.8} />
           Add tunnel
         </Button>
@@ -159,7 +169,7 @@ export function TunnelsView() {
         </div>
       ) : null}
 
-      {!hydrated ? (
+      {!hydrated || !servicesHydrated ? (
         <div className="grid gap-3 sm:grid-cols-2">
           {[0, 1].map((index) => (
             <div
@@ -181,15 +191,22 @@ export function TunnelsView() {
                 Tor onion hosting works without a tunnel. Add one when you also need a
                 clearnet URL.
               </p>
-              <Button className="mt-6" onClick={openCreate} disabled={services.length === 0}>
-                <Plus className="size-4" strokeWidth={1.8} />
-                Add a tunnel
-              </Button>
               {services.length === 0 ? (
-                <p className="mt-3 font-mono text-[11px] text-faint">
-                  Create and start a service first.
-                </p>
-              ) : null}
+                <>
+                  <Button className="mt-6" onClick={onOpenServices}>
+                    <Plus className="size-4" strokeWidth={1.8} />
+                    Create a service
+                  </Button>
+                  <p className="mt-3 font-mono text-[11px] text-faint">
+                    A tunnel needs a running service. Create one first.
+                  </p>
+                </>
+              ) : (
+                <Button className="mt-6" onClick={openCreate}>
+                  <Plus className="size-4" strokeWidth={1.8} />
+                  Add a tunnel
+                </Button>
+              )}
             </div>
           </section>
 

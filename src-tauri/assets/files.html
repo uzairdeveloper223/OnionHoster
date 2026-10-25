@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Public files · OnionHoster</title>
+<link rel="icon" type="image/svg+xml" href="/logo.svg">
+<style>
+:root{
+  color-scheme:light dark;
+  --bg:#f5f5f4;--surface:#ffffff;--raised:#fafafa;--ink:#0a0a0a;--muted:#5f5f5f;
+  --faint:#8a8a8a;--line:#dededb;--line-strong:#bdbdb8;--hover:#f0f0ee;--danger:#8a1f1f;
+  --shadow:0 18px 60px rgba(0,0,0,.14);
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#070707;--surface:#0e0e0e;--raised:#151515;--ink:#f4f4f2;--muted:#a3a3a0;
+  --faint:#777774;--line:#242422;--line-strong:#3a3a36;--hover:#1b1b19;--danger:#ff9b9b;
+  --shadow:0 18px 60px rgba(0,0,0,.55)}
+}
+*{box-sizing:border-box}
+html,body{min-height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font:14px/1.55 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:inherit;text-underline-offset:3px}
+.top{
+  position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;
+  gap:16px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--bg) 88%,transparent);
+  backdrop-filter:blur(12px);padding:12px max(18px,calc((100vw - 1080px)/2));
+}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.mark{display:block;width:34px;height:34px;border:1px solid var(--line);border-radius:10px;background:#0a0a0a;overflow:hidden;flex:none}
+.mark img{display:block;width:100%;height:100%}
+.brand h1{margin:0;font-size:13px;font-weight:600;letter-spacing:-.01em;white-space:nowrap}
+.brand p{margin:1px 0 0;font:10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint);white-space:nowrap}
+.quota{display:flex;align-items:center;gap:10px;flex:none;min-width:min(280px,38vw)}
+.quota-text{font:9.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);white-space:nowrap}
+.quota-bar{height:4px;width:110px;border-radius:999px;background:var(--line);overflow:hidden;flex:none}
+.quota-fill{height:100%;width:0;background:var(--ink);transition:width .25s ease}
+.wrap{width:100%;max-width:1080px;margin:0 auto;padding:24px 18px 56px}
+.intro{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;margin:0 0 20px}
+.intro h2{margin:0;font-size:21px;line-height:1.2;letter-spacing:-.03em;font-weight:600}
+.intro p{margin:7px 0 0;max-width:560px;color:var(--muted);font-size:12px;line-height:1.65}
+.upload-card{
+  border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:16px;
+  display:flex;flex-direction:column;gap:12px;box-shadow:0 1px 0 rgba(0,0,0,.02);
+}
+.dropzone{
+  border:1px dashed var(--line-strong);border-radius:11px;background:var(--raised);
+  padding:22px 18px;text-align:center;transition:border-color .15s,background .15s;outline:none;
+}
+.dropzone:hover,.dropzone:focus-visible{border-color:var(--ink)}
+.dropzone.drag{border-color:var(--ink);background:var(--hover)}
+.dropzone .icon{width:38px;height:38px;margin:0 auto 9px;border:1px solid var(--line);border-radius:10px;background:var(--surface);display:grid;place-items:center;color:var(--muted)}
+.dropzone h3{margin:0 0 4px;font-size:12.5px;font-weight:600}
+.dropzone p{margin:0;font-size:11px;color:var(--faint)}
+.dropzone p span{color:var(--muted)}
+.selected{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--raised);border-radius:9px;padding:9px 11px;font-size:11px}
+.selected[hidden]{display:none}
+.selected .name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.selected .size{font:9.5px ui-monospace,monospace;color:var(--faint);flex:none}
+.selected button{border:0;background:transparent;color:var(--faint);display:grid;place-items:center;padding:2px}
+.selected button:hover{color:var(--ink)}
+.upload-actions{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.upload-hint{font:9.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint)}
+.primary{
+  display:inline-flex;align-items:center;gap:7px;height:34px;border:1px solid var(--ink);border-radius:8px;
+  background:var(--ink);color:var(--bg);padding:0 13px;font-size:11.5px;font-weight:600;flex:none;
+}
+.primary:disabled{opacity:.4;cursor:default}
+.progress{height:4px;background:var(--line);border-radius:999px;overflow:hidden;display:none}
+.progress.on{display:block}
+.progress span{display:block;height:100%;width:0;background:var(--ink);transition:width .15s linear}
+.section-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;margin:30px 0 12px}
+.section-head h3{margin:0;font-size:13px;font-weight:600}
+.section-head p{margin:0;font:9.5px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.card{
+  display:flex;flex-direction:column;border:1px solid var(--line);background:var(--surface);border-radius:12px;
+  overflow:hidden;min-width:0;
+}
+.preview{
+  position:relative;height:150px;border:0;border-bottom:1px solid var(--line);background:var(--raised);
+  display:grid;place-items:center;overflow:hidden;width:100%;padding:0;color:var(--faint);
+}
+.preview img,.preview video{width:100%;height:100%;object-fit:cover;display:block}
+.preview video{pointer-events:none;background:#000}
+.preview .play{
+  position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.24);
+}
+.preview .play span{
+  display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.94);
+  color:#0a0a0a;box-shadow:0 2px 12px rgba(0,0,0,.2);
+}
+.preview .file-mark{display:flex;flex-direction:column;align-items:center;gap:7px}
+.preview .file-mark span{font:9px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase}
+.details{padding:10px 11px 4px;min-width:0}
+.name{font-size:11.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta{margin-top:3px;display:flex;align-items:center;gap:6px;font:9.5px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint);min-width:0}
+.meta .dot{width:2px;height:2px;border-radius:50%;background:var(--faint);flex:none}
+.actions{display:flex;align-items:center;gap:4px;padding:6px 7px 8px;margin-top:auto}
+.action{
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;height:27px;border:1px solid transparent;
+  border-radius:6px;background:transparent;color:var(--muted);padding:0 7px;font-size:10px;text-decoration:none;
+}
+.action:hover{background:var(--hover);color:var(--ink)}
+.action.grow{flex:1}
+.action.danger:hover{color:var(--danger)}
+.empty{
+  border:1px dashed var(--line);border-radius:12px;padding:44px 20px;text-align:center;color:var(--faint);
+}
+.empty .ring{width:44px;height:44px;margin:0 auto 13px;border:1px solid var(--line);border-radius:50%;display:grid;place-items:center}
+.empty h3{margin:0 0 5px;font-size:13px;color:var(--ink);font-weight:600}
+.empty p{margin:0;font-size:11.5px}
+.footer-note{margin:26px 0 0;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;font:9.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint)}
+.error{margin:12px 0 0;color:var(--danger);font-size:11px;min-height:0}
+.error:empty{display:none}
+.lightbox{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.82);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px}
+.lightbox[hidden]{display:none}
+.lightbox-inner{width:min(980px,100%);max-height:92dvh;display:flex;flex-direction:column;gap:10px}
+.lightbox-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;color:#f4f4f2;font-size:11px;min-width:0}
+.lightbox-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.lightbox-actions{display:flex;align-items:center;gap:8px;flex:none}
+.lightbox-actions a,.lightbox-actions button{
+  display:grid;place-items:center;width:32px;height:32px;border:1px solid rgba(255,255,255,.22);
+  border-radius:8px;background:rgba(255,255,255,.06);color:#f4f4f2;text-decoration:none;
+}
+.lightbox-body{min-height:0;display:flex;align-items:center;justify-content:center;background:#000;border-radius:10px;overflow:hidden}
+.lightbox-body img{max-width:100%;max-height:82dvh;object-fit:contain;display:block}
+.lightbox-body video{width:100%;max-height:82dvh;display:block;background:#000}
+@media (max-width:700px){
+  .top{padding:10px 14px}
+  .wrap{padding:18px 12px 44px}
+  .quota{min-width:0}
+  .quota-bar{width:76px}
+  .quota-text{display:none}
+  .intro{display:block}
+  .intro h2{font-size:19px}
+  .upload-actions{display:block}
+  .upload-actions .primary{margin-top:10px;width:100%;justify-content:center}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="mark" aria-hidden="true">
+      <img src="/logo.svg" alt="">
+    </span>
+    <div>
+      <h1>Public files</h1>
+      <p>Served by OnionHoster</p>
+    </div>
+  </div>
+  <div class="quota" aria-label="Storage usage">
+    <span class="quota-text" id="quota-text">0 B of 2 GB</span>
+    <span class="quota-bar"><span class="quota-fill" id="quota-fill"></span></span>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="intro">
+    <div>
+      <h2>Share files over this onion address.</h2>
+      <p>Anyone with the address can upload and download. Files stay on the host machine and persist across restarts. Images and browser-supported videos get compact previews; nothing is transcoded.</p>
+    </div>
+  </div>
+
+  <section class="upload-card" aria-labelledby="upload-title">
+    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-labelledby="upload-title">
+      <div class="icon" aria-hidden="true">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+          <path d="M12 16V4m0 0 4 4m-4-4L8 8"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
+        </svg>
+      </div>
+      <h3 id="upload-title">Drop a file here or choose one</h3>
+      <p>Up to <span>50 MB</span> per file · <span>2 GB</span> total storage</p>
+    </div>
+    <input id="file" type="file" hidden>
+    <div class="selected" id="selected" hidden>
+      <span class="name" id="selected-name"></span>
+      <span class="size" id="selected-size"></span>
+      <button id="clear" type="button" title="Remove file" aria-label="Remove file">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="progress" id="progress"><span id="progress-fill"></span></div>
+    <div class="upload-actions">
+      <span class="upload-hint">Only upload files you have permission to share.</span>
+      <button class="primary" id="upload" type="button" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 16V4m0 0 4 4m-4-4L8 8"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+        Upload
+      </button>
+    </div>
+    <div class="error" id="error" role="alert"></div>
+  </section>
+
+  <div class="section-head">
+    <h3>Files</h3>
+    <p id="file-count">0 files</p>
+  </div>
+
+  <section class="grid" id="grid" aria-live="polite" aria-label="Public files"></section>
+  <div class="empty" id="empty">
+    <div class="ring" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/>
+      </svg>
+    </div>
+    <h3>No files yet</h3>
+    <p>Upload the first file to this public space.</p>
+  </div>
+
+  <div class="footer-note">
+    <span>50 MB per file · 2 GB storage · browser playback only</span>
+    <span>Files are not included in address backups</span>
+  </div>
+</main>
+
+<div class="lightbox" id="lightbox" hidden>
+  <div class="lightbox-inner" role="dialog" aria-modal="true" aria-label="File preview">
+    <div class="lightbox-bar">
+      <span class="lightbox-name" id="lightbox-name"></span>
+      <span class="lightbox-actions">
+        <a id="lightbox-download" href="#" download title="Download" aria-label="Download">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 19h16"/></svg>
+        </a>
+        <button id="lightbox-close" type="button" title="Close" aria-label="Close">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+      </span>
+    </div>
+    <div class="lightbox-body" id="lightbox-body"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const MAX_FILE = 50 * 1024 * 1024;
+  const QUOTA = 2 * 1024 * 1024 * 1024;
+  const clientId = getClientId();
+  let files = [];
+  let selected = null;
+  let uploading = false;
+
+  const $ = (id) => document.getElementById(id);
+  const grid = $("grid");
+  const empty = $("empty");
+  const dropzone = $("dropzone");
+  const fileInput = $("file");
+  const selectedRow = $("selected");
+  const selectedName = $("selected-name");
+  const selectedSize = $("selected-size");
+  const clearButton = $("clear");
+  const uploadButton = $("upload");
+  const progress = $("progress");
+  const progressFill = $("progress-fill");
+  const errorLine = $("error");
+  const quotaText = $("quota-text");
+  const quotaFill = $("quota-fill");
+  const fileCount = $("file-count");
+  const lightbox = $("lightbox");
+  const lightboxBody = $("lightbox-body");
+  const lightboxName = $("lightbox-name");
+  const lightboxDownload = $("lightbox-download");
+
+  function getClientId() {
+    const existing = localStorage.getItem("onionhoster.files.client");
+    if (existing && /^[A-Za-z0-9_-]{8,80}$/.test(existing)) {
+      return existing;
+    }
+    const created = newId();
+    localStorage.setItem("onionhoster.files.client", created);
+    return created;
+  }
+
+  function newId() {
+    if (crypto.randomUUID) return crypto.randomUUID();
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + " MB";
+    return (bytes / 1024 / 1024 / 1024).toFixed(2) + " GB";
+  }
+
+  function formatDate(timestamp) {
+    return new Date(timestamp).toLocaleString([], {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  function setError(message) {
+    errorLine.textContent = message || "";
+  }
+
+  function setQuota(used) {
+    const percent = Math.min(100, (used / QUOTA) * 100);
+    quotaText.textContent = formatSize(used) + " of 2 GB";
+    quotaFill.style.width = percent.toFixed(2) + "%";
+  }
+
+  function svg(paths, width) {
+    const node = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    node.setAttribute("viewBox", "0 0 24 24");
+    node.setAttribute("fill", "none");
+    node.setAttribute("stroke", "currentColor");
+    node.setAttribute("stroke-width", "1.7");
+    node.setAttribute("width", String(width || 15));
+    node.setAttribute("height", String(width || 15));
+    node.setAttribute("aria-hidden", "true");
+    for (const d of paths) {
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", d);
+      node.appendChild(path);
+    }
+    return node;
+  }
+
+  function fileMark(file) {
+    const wrap = document.createElement("div");
+    wrap.className = "file-mark";
+    wrap.appendChild(svg(["M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z", "M14 3v5h5"], 25));
+    const extension = file.fileName.includes(".")
+      ? file.fileName.split(".").pop().slice(0, 6)
+      : "FILE";
+    const label = document.createElement("span");
+    label.textContent = extension;
+    wrap.appendChild(label);
+    return wrap;
+  }
+
+  function previewNode(file) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "preview";
+    button.title = file.kind === "video" ? "Watch video" : file.kind === "image" ? "Open full size" : "Download file";
+
+    if (file.kind === "image") {
+      const image = document.createElement("img");
+      image.src = file.url;
+      image.alt = file.fileName;
+      image.loading = "lazy";
+      button.appendChild(image);
+      button.addEventListener("click", () => openLightbox(file));
+    } else if (file.kind === "video") {
+      const video = document.createElement("video");
+      video.src = file.url;
+      video.preload = "metadata";
+      video.muted = true;
+      video.playsInline = true;
+      button.appendChild(video);
+      const overlay = document.createElement("span");
+      overlay.className = "play";
+      const circle = document.createElement("span");
+      circle.appendChild(svg(["M8 5v14l11-7Z"], 16));
+      overlay.appendChild(circle);
+      button.appendChild(overlay);
+      button.addEventListener("click", () => openLightbox(file));
+    } else {
+      button.appendChild(fileMark(file));
+      button.addEventListener("click", () => {
+        window.location.href = file.downloadUrl;
+      });
+    }
+    return button;
+  }
+
+  function actionLink(file, label, paths, download) {
+    const link = document.createElement("a");
+    link.className = "action grow";
+    link.href = download ? file.downloadUrl : file.url;
+    if (download) link.download = file.fileName;
+    link.title = label;
+    link.appendChild(svg(paths, 13));
+    const text = document.createElement("span");
+    text.textContent = label;
+    link.appendChild(text);
+    return link;
+  }
+
+  function card(file) {
+    const article = document.createElement("article");
+    article.className = "card";
+    article.dataset.id = file.id;
+    article.appendChild(previewNode(file));
+
+    const details = document.createElement("div");
+    details.className = "details";
+    const name = document.createElement("div");
+    name.className = "name";
+    name.textContent = file.fileName;
+    name.title = file.fileName;
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    const size = document.createElement("span");
+    size.textContent = formatSize(file.size);
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    const date = document.createElement("span");
+    date.textContent = formatDate(file.createdAt);
+    meta.append(size, dot, date);
+    details.append(name, meta);
+    article.appendChild(details);
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    if (file.kind === "image" || file.kind === "video") {
+      actions.appendChild(
+        actionLink(
+          file,
+          file.kind === "video" ? "Watch" : "View",
+          file.kind === "video" ? ["M8 5v14l11-7Z"] : ["M15 3h6v6", "M21 3l-9 9", "M10 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"],
+          false
+        )
+      );
+      const view = actions.lastChild;
+      view.addEventListener("click", (event) => {
+        event.preventDefault();
+        openLightbox(file);
+      });
+    }
+    actions.appendChild(
+      actionLink(file, "Download", ["M12 3v12m0 0 4-4m-4 4-4-4M4 19h16"], true)
+    );
+    if (file.owned) {
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "action danger";
+      remove.title = "Delete file";
+      remove.setAttribute("aria-label", "Delete " + file.fileName);
+      remove.appendChild(svg(["M4 7h16", "M9 7V4h6v3", "M6 7l1 14h10l1-14", "M10 11v6M14 11v6"], 13));
+      remove.addEventListener("click", () => deleteFile(file));
+      actions.appendChild(remove);
+    }
+    article.appendChild(actions);
+    return article;
+  }
+
+  function render() {
+    grid.replaceChildren();
+    const fragment = document.createDocumentFragment();
+    for (const file of files) fragment.appendChild(card(file));
+    grid.appendChild(fragment);
+    empty.hidden = files.length > 0;
+    fileCount.textContent = files.length + (files.length === 1 ? " file" : " files");
+  }
+
+  async function load() {
+    try {
+      const response = await fetch("/api/files?client=" + encodeURIComponent(clientId));
+      if (!response.ok) throw new Error(await response.text());
+      const payload = await response.json();
+      files = payload.files || [];
+      setQuota(payload.used || 0);
+      render();
+    } catch (error) {
+      setError("Could not load files: " + error.message);
+    }
+  }
+
+  function setSelected(file) {
+    setError("");
+    if (!file) return;
+    if (file.size > MAX_FILE) {
+      setError("Public files can be at most 50 MB.");
+      return;
+    }
+    selected = file;
+    selectedName.textContent = file.name;
+    selectedSize.textContent = formatSize(file.size);
+    selectedRow.hidden = false;
+    uploadButton.disabled = false;
+  }
+
+  function clearSelected() {
+    selected = null;
+    fileInput.value = "";
+    selectedRow.hidden = true;
+    selectedName.textContent = "";
+    selectedSize.textContent = "";
+    uploadButton.disabled = true;
+    progress.classList.remove("on");
+    progressFill.style.width = "0%";
+  }
+
+  function upload() {
+    if (!selected || uploading) return;
+    setError("");
+    uploading = true;
+    uploadButton.disabled = true;
+    progress.classList.add("on");
+    progressFill.style.width = "0%";
+
+    const form = new FormData();
+    form.append("clientId", clientId);
+    form.append("file", selected, selected.name);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/files");
+    xhr.upload.addEventListener("progress", (event) => {
+      if (event.lengthComputable) {
+        progressFill.style.width = ((event.loaded / event.total) * 100).toFixed(1) + "%";
+      }
+    });
+    xhr.addEventListener("load", () => {
+      uploading = false;
+      uploadButton.disabled = false;
+      progress.classList.remove("on");
+      progressFill.style.width = "0%";
+      if (xhr.status >= 200 && xhr.status < 300) {
+        clearSelected();
+        setError("");
+        load();
+      } else {
+        setError(xhr.responseText || "The file could not be uploaded.");
+      }
+    });
+    xhr.addEventListener("error", () => {
+      uploading = false;
+      uploadButton.disabled = false;
+      progress.classList.remove("on");
+      setError("The file could not be uploaded.");
+    });
+    xhr.send(form);
+  }
+
+  async function deleteFile(file) {
+    if (!window.confirm("Delete “" + file.fileName + "” from this public space?")) return;
+    try {
+      const response = await fetch(
+        "/api/files/" + encodeURIComponent(file.id) + "?client=" + encodeURIComponent(clientId),
+        { method: "DELETE" }
+      );
+      if (!response.ok && response.status !== 404) {
+        throw new Error(await response.text());
+      }
+      load();
+    } catch (error) {
+      setError("Could not delete the file: " + error.message);
+    }
+  }
+
+  function openLightbox(file) {
+    lightboxBody.replaceChildren();
+    lightboxName.textContent = file.fileName;
+    lightboxDownload.href = file.downloadUrl;
+    lightboxDownload.setAttribute("download", file.fileName);
+    if (file.kind === "image") {
+      const image = document.createElement("img");
+      image.src = file.url;
+      image.alt = file.fileName;
+      lightboxBody.appendChild(image);
+    } else if (file.kind === "video") {
+      const video = document.createElement("video");
+      video.src = file.url;
+      video.controls = true;
+      video.autoplay = true;
+      video.playsInline = true;
+      lightboxBody.appendChild(video);
+    }
+    lightbox.hidden = false;
+    $("lightbox-close").focus();
+  }
+
+  function closeLightbox() {
+    lightbox.hidden = true;
+    lightboxBody.replaceChildren();
+  }
+
+  dropzone.addEventListener("click", () => fileInput.click());
+  dropzone.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      fileInput.click();
+    }
+  });
+  fileInput.addEventListener("change", () => setSelected(fileInput.files && fileInput.files[0]));
+  clearButton.addEventListener("click", clearSelected);
+  uploadButton.addEventListener("click", upload);
+  $("lightbox-close").addEventListener("click", closeLightbox);
+  lightbox.addEventListener("mousedown", (event) => {
+    if (event.target === lightbox) closeLightbox();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !lightbox.hidden) closeLightbox();
+  });
+
+  for (const eventName of ["dragenter", "dragover"]) {
+    dropzone.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      dropzone.classList.add("drag");
+    });
+  }
+  for (const eventName of ["dragleave", "drop"]) {
+    dropzone.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      dropzone.classList.remove("drag");
+    });
+  }
+  dropzone.addEventListener("drop", (event) => {
+    if (event.dataTransfer && event.dataTransfer.files.length) {
+      setSelected(event.dataTransfer.files[0]);
+    }
+  });
+
+  setQuota(0);
+  load();
+})();
+</script>
+</body>
+</html>

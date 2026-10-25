@@ -17,9 +17,9 @@ rm -f "${APPS_DIR}/onionhoster.desktop"
 cat >"${DESKTOP_FILE}" <<EOF
 [Desktop Entry]
 Type=Application
-Name=OnionHoster (Dev)
+Name=OnionHoster
 GenericName=Tor service host
-Comment=Run the OnionHoster development build
+Comment=Run OnionHoster from source
 Exec=bash -lc "cd '${ROOT}' && pnpm tauri dev"
 Icon=onionhoster
 Terminal=false

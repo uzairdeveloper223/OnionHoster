@@ -2,9 +2,13 @@ import { useEffect, useRef } from "react";
 import { Eraser, Terminal, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { formatLogTime } from "@/lib/tor";
-import type { TunnelView } from "@/lib/tunnels";
+import type { TunnelLog, TunnelView } from "@/lib/tunnels";
 import { useTunnelStore } from "@/stores/tunnels";
 import { cn } from "@/lib/utils";
+
+// Keep the selector result referentially stable. Returning a fresh array from
+// a Zustand selector makes React 19's useSyncExternalStore loop forever.
+const EMPTY_LOGS: TunnelLog[] = [];
 
 const levelClass: Record<string, string> = {
   error: "font-semibold text-ink",
@@ -19,9 +23,10 @@ export function TunnelLogDialog({
   tunnel: TunnelView | null;
   onClose: () => void;
 }) {
-  const logs = useTunnelStore((state) =>
-    tunnel ? state.logs[tunnel.id] ?? [] : [],
+  const tunnelLogs = useTunnelStore((state) =>
+    tunnel ? state.logs[tunnel.id] : undefined,
   );
+  const logs = tunnelLogs ?? EMPTY_LOGS;
   const loadLogs = useTunnelStore((state) => state.loadLogs);
   const clearLogs = useTunnelStore((state) => state.clearLogs);
   const scrollRef = useRef<HTMLDivElement>(null);

@@ -436,7 +436,11 @@ impl TunnelManager {
             app,
             id,
             "info",
-            &format!("Starting {} tunnel to {}.", record.provider.label(), target.target()),
+            &format!(
+                "Starting {} tunnel to {}.",
+                record.provider.label(),
+                target.target()
+            ),
         );
 
         let (program, args) = match record.provider {
@@ -926,7 +930,9 @@ fn service_target(services: &ServiceManager, service_id: &str) -> Result<Service
     match &service.source {
         ServiceSource::Static { .. }
         | ServiceSource::Proxy { .. }
-        | ServiceSource::DefaultPage => {
+        | ServiceSource::DefaultPage
+        | ServiceSource::Chat
+        | ServiceSource::FileShare => {
             let port = service
                 .local_port
                 .ok_or_else(|| "The service has no local HTTP port yet.".to_string())?;
@@ -1007,8 +1013,7 @@ fn validate_input(
             .any(|token| command.contains(token))
         {
             return Err(
-                "The custom command must include {port}, {target}, {url}, or {host}."
-                    .to_string(),
+                "The custom command must include {port}, {target}, {url}, or {host}.".to_string(),
             );
         }
     }
@@ -1153,30 +1158,16 @@ fn spawn_monitor(
 }
 
 fn resolve_cloudflared(app: &AppHandle) -> Result<PathBuf, String> {
-    let mut candidates = Vec::new();
+    if let Ok(path) = crate::runtime::ensure_cloudflared(app)
+        && is_executable(&path)
+    {
+        return Ok(path);
+    }
 
-    if let Some(path) = std::env::var_os("ONIONHOSTER_CLOUDFLARED") {
-        candidates.push(PathBuf::from(path));
-    }
-    if let Ok(resource_dir) = app.path().resource_dir() {
-        candidates.push(resource_dir.join("cloudflared").join("cloudflared"));
-        candidates.push(
-            resource_dir
-                .join("resources")
-                .join("cloudflared")
-                .join("cloudflared"),
-        );
-    }
-    candidates.push(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("resources")
-            .join("cloudflared")
-            .join("cloudflared"),
-    );
-    candidates.push(PathBuf::from("/usr/lib/OnionHoster/resources/cloudflared/cloudflared"));
-    candidates.push(PathBuf::from("/usr/lib/onionhoster/resources/cloudflared/cloudflared"));
-    candidates.push(PathBuf::from("/usr/bin/cloudflared"));
-    candidates.push(PathBuf::from("/usr/local/bin/cloudflared"));
+    let mut candidates = vec![
+        PathBuf::from("/usr/bin/cloudflared"),
+        PathBuf::from("/usr/local/bin/cloudflared"),
+    ];
 
     if let Some(path) = find_in_path("cloudflared") {
         candidates.push(path);
@@ -1276,10 +1267,7 @@ pub fn get_tunnels(tunnels: State<'_, Arc<TunnelManager>>) -> Vec<TunnelView> {
 }
 
 #[tauri::command]
-pub fn get_tunnel_logs(
-    tunnels: State<'_, Arc<TunnelManager>>,
-    id: String,
-) -> Vec<TunnelLog> {
+pub fn get_tunnel_logs(tunnels: State<'_, Arc<TunnelManager>>, id: String) -> Vec<TunnelLog> {
     tunnels.logs(&id)
 }
 

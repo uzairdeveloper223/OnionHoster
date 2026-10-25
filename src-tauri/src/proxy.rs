@@ -27,7 +27,10 @@ use rustls::{
     crypto::{verify_tls12_signature, verify_tls13_signature},
     pki_types::{CertificateDer, ServerName, UnixTime},
 };
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Once},
+    time::Duration,
+};
 use tokio::sync::oneshot;
 use tokio_tungstenite::{Connector as WebSocketConnector, tungstenite::Message as UpstreamMessage};
 
@@ -101,7 +104,15 @@ impl ServerCertVerifier for AcceptAnyServerCert {
     }
 }
 
+fn install_crypto_provider() {
+    static INSTALL: Once = Once::new();
+    INSTALL.call_once(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
+
 fn tls_config(accept_invalid_certs: bool) -> rustls::ClientConfig {
+    install_crypto_provider();
     let mut roots = rustls::RootCertStore::empty();
     roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 

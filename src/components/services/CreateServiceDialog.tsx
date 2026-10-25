@@ -8,10 +8,16 @@ import {
   Circle,
   Copy,
   FileCode2,
+  Download,
   FileText,
   FolderOpen,
+  FolderUp,
+  KeyRound,
   Loader2,
+  MessagesSquare,
+  Radar,
   Server,
+  ShieldCheck,
   X,
 } from "lucide-react";
 import { OnionMark } from "@/components/brand/OnionMark";
@@ -19,6 +25,7 @@ import { Button } from "@/components/ui/Button";
 import { formatBytes, serviceAddress, type ServiceSource, type ServiceView } from "@/lib/services";
 import { copyText } from "@/lib/clipboard";
 import { isTauri } from "@/lib/app";
+import { detectLocalPorts, type DetectedPort } from "@/lib/ports";
 import { useServiceStore } from "@/stores/services";
 import { useTorStore } from "@/stores/tor";
 import { cn } from "@/lib/utils";
@@ -120,10 +127,18 @@ export function CreateServiceDialog({
   const [tcpPort, setTcpPort] = useState("22");
   const [virtualPort, setVirtualPort] = useState("");
   const [autostart, setAutostart] = useState(false);
+  const [privateOnion, setPrivateOnion] = useState(false);
+  const [pow, setPow] = useState(false);
+  const [maxStreams, setMaxStreams] = useState("");
   const [created, setCreated] = useState<ServiceView | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedAuth, setCopiedAuth] = useState(false);
+  const [detectedPorts, setDetectedPorts] = useState<DetectedPort[] | null>(null);
+  const [detecting, setDetecting] = useState(false);
+  const [detectError, setDetectError] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
 
   const createService = useServiceStore((state) => state.create);
   const startService = useServiceStore((state) => state.start);
@@ -134,6 +149,11 @@ export function CreateServiceDialog({
   const startTor = useTorStore((state) => state.start);
 
   const service = live ?? created;
+  const clientAuth = service?.onion.clientAuth?.[0];
+  const clientAuthLine =
+    service?.onion.serviceId && clientAuth
+      ? `${service.onion.serviceId}:descriptor:x25519:${clientAuth.privateKey}`
+      : null;
 
   useEffect(() => {
     if (!isOpen) {
@@ -155,11 +175,60 @@ export function CreateServiceDialog({
     setTcpPort("22");
     setVirtualPort("");
     setAutostart(false);
+    setPrivateOnion(false);
+    setPow(false);
+    setMaxStreams("");
     setCreated(null);
     setSubmitting(false);
     setError(null);
     setCopied(false);
+    setCopiedAuth(false);
+    setDetectedPorts(null);
+    setDetecting(false);
+    setDetectError(null);
+    setDragActive(false);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !isTauri || kind !== "static" || step !== "details") {
+      return;
+    }
+
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    void (async () => {
+      const { getCurrentWebview } = await import("@tauri-apps/api/webview");
+      const stop = await getCurrentWebview().onDragDropEvent((event) => {
+        if (event.payload.type === "enter" || event.payload.type === "over") {
+          setDragActive(true);
+          return;
+        }
+        if (event.payload.type === "leave") {
+          setDragActive(false);
+          return;
+        }
+
+        setDragActive(false);
+        const path = event.payload.paths[0];
+        if (path) {
+          setRoot(path);
+          setError(null);
+        }
+      });
+
+      if (disposed) {
+        stop();
+      } else {
+        unlisten = stop;
+      }
+    })();
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [isOpen, kind, step]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -206,6 +275,10 @@ export function CreateServiceDialog({
         };
       case "default_page":
         return { kind: "default_page" };
+      case "chat":
+        return { kind: "chat" };
+      case "file_share":
+        return { kind: "file_share" };
     }
   }
 
@@ -240,6 +313,12 @@ export function CreateServiceDialog({
         return "Enter a valid onion virtual port between 1 and 65535.";
       }
     }
+    if (maxStreams.trim()) {
+      const streams = Number(maxStreams);
+      if (!Number.isInteger(streams) || streams < 1 || streams > 65535) {
+        return "Enter a max stream count between 1 and 65535, or leave it empty.";
+      }
+    }
     return null;
   }
 
@@ -258,6 +337,9 @@ export function CreateServiceDialog({
         source: buildSource(),
         virtualPort: virtualPort.trim() ? Number(virtualPort) : undefined,
         autostart,
+        pow,
+        maxStreams: maxStreams.trim() ? Number(maxStreams) : undefined,
+        private: privateOnion,
       });
       setCreated(service);
       setStep("publishing");
@@ -316,6 +398,21 @@ export function CreateServiceDialog({
     }
   }
 
+  async function detectPorts() {
+    if (!isTauri || detecting) {
+      return;
+    }
+    setDetecting(true);
+    setDetectError(null);
+    try {
+      setDetectedPorts(await detectLocalPorts());
+    } catch (scanError) {
+      setDetectError(String(scanError));
+    } finally {
+      setDetecting(false);
+    }
+  }
+
   async function copyAddress() {
     if (!service) {
       return;
@@ -325,6 +422,29 @@ export function CreateServiceDialog({
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
     }
+  }
+
+  async function copyClientAuth() {
+    if (!clientAuthLine) {
+      return;
+    }
+    if (await copyText(clientAuthLine)) {
+      setCopiedAuth(true);
+      window.setTimeout(() => setCopiedAuth(false), 1600);
+    }
+  }
+
+  function downloadClientAuth() {
+    if (!clientAuthLine || !service?.onion.serviceId) {
+      return;
+    }
+    const blob = new Blob([`${clientAuthLine}\n`], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${service.onion.serviceId}.auth_private`;
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 
   const state = service?.state;
@@ -341,7 +461,11 @@ export function CreateServiceDialog({
           ? "TCP target configured"
           : kind === "default_page"
             ? "Built-in page ready"
-            : "Local server ready",
+            : kind === "chat"
+              ? "Chat server ready"
+              : kind === "file_share"
+                ? "File server ready"
+                : "Local server ready",
       done: localReady,
       active: Boolean(created) && !localReady && !processError && !waiting,
     },
@@ -381,7 +505,9 @@ export function CreateServiceDialog({
               {step === "type"
                 ? "Choose what OnionHoster should publish."
                 : step === "details"
-                  ? kind === "default_page"
+                  ? kind === "default_page" ||
+                    kind === "chat" ||
+                    kind === "file_share"
                     ? "Configure the onion port and service options."
                     : "Configure the local source and onion port."
                   : "The service is being prepared and registered with Tor."}
@@ -427,6 +553,20 @@ export function CreateServiceDialog({
                     title: "OnionHoster default page",
                     description:
                       "Serve a built-in page about the project, with logo, links, and favicon.",
+                  },
+                  {
+                    kind: "chat" as const,
+                    icon: MessagesSquare,
+                    title: "Public chat",
+                    description:
+                      "One public room with anonymous names, media previews, and stored history.",
+                  },
+                  {
+                    kind: "file_share" as const,
+                    icon: FolderUp,
+                    title: "File sharing",
+                    description:
+                      "A public upload and download space with previews and video streaming.",
                   },
                 ] satisfies {
                   kind: ServiceKind;
@@ -479,7 +619,11 @@ export function CreateServiceDialog({
                         ? "Development server"
                         : kind === "tcp"
                           ? "SSH"
-                          : "OnionHoster page"
+                          : kind === "chat"
+                            ? "Community chat"
+                            : kind === "file_share"
+                              ? "Shared files"
+                              : "OnionHoster page"
                   }
                   maxLength={80}
                   autoFocus
@@ -523,6 +667,16 @@ export function CreateServiceDialog({
                       ) : null}
                     </div>
                   </Field>
+                  <p
+                    className={cn(
+                      "text-[11px] leading-4 transition-colors",
+                      dragActive ? "text-ink" : "text-faint",
+                    )}
+                  >
+                    {dragActive
+                      ? "Drop the folder or HTML file to use it."
+                      : "You can also drop a folder or HTML file onto the window."}
+                  </p>
                   <div className="grid gap-2 sm:grid-cols-2">
                     <CheckRow
                       checked={spaFallback}
@@ -580,6 +734,48 @@ export function CreateServiceDialog({
                       />
                     </Field>
                   </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={detecting || !isTauri}
+                      onClick={() => void detectPorts()}
+                    >
+                      {detecting ? (
+                        <Loader2 className="size-3.5 animate-spin" strokeWidth={1.8} />
+                      ) : (
+                        <Radar className="size-3.5" strokeWidth={1.6} />
+                      )}
+                      {detecting ? "Scanning" : "Detect local ports"}
+                    </Button>
+                    {detectedPorts?.map((detected) => (
+                      <button
+                        key={detected.port}
+                        type="button"
+                        onClick={() => {
+                          setProxyPort(String(detected.port));
+                          setScheme(detected.scheme);
+                        }}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 font-mono text-[10px] transition-colors",
+                          proxyPort === String(detected.port)
+                            ? "border-line-strong bg-ink text-bg"
+                            : "border-line bg-bg text-muted hover:border-line-strong hover:text-ink",
+                        )}
+                      >
+                        {detected.port}
+                        <span className="uppercase opacity-70">{detected.scheme}</span>
+                      </button>
+                    ))}
+                    {detectedPorts?.length === 0 ? (
+                      <span className="text-[11px] text-faint">
+                        No common local ports are open.
+                      </span>
+                    ) : null}
+                  </div>
+                  {detectError ? (
+                    <p className="text-[11px] leading-4 text-muted">{detectError}</p>
+                  ) : null}
                   <div className="grid gap-2 sm:grid-cols-2">
                     <CheckRow
                       checked={rewriteHost}
@@ -645,6 +841,58 @@ export function CreateServiceDialog({
                 </div>
               ) : null}
 
+              {kind === "chat" ? (
+                <div className="rounded-xl border border-line bg-bg p-3.5">
+                  <div className="flex items-start gap-3">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-line bg-bg">
+                      <MessagesSquare className="size-4 text-muted" strokeWidth={1.6} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[12px] font-medium text-ink">
+                        Public chat room
+                      </div>
+                      <p className="mt-1 text-[11px] leading-4 text-muted">
+                        One room. Visitors get an anonymous#1234 identity and can
+                        set a display name. Messages and media stay on this
+                        machine across service and app restarts.
+                      </p>
+                    </div>
+                  </div>
+                  <ul className="mt-3 grid gap-1.5 border-t border-line pt-3 font-mono text-[10px] text-faint sm:grid-cols-2">
+                    <li>25 MB per file</li>
+                    <li>1 GB storage quota</li>
+                    <li>Compact image and video previews</li>
+                    <li>Not included in address backups</li>
+                  </ul>
+                </div>
+              ) : null}
+
+              {kind === "file_share" ? (
+                <div className="rounded-xl border border-line bg-bg p-3.5">
+                  <div className="flex items-start gap-3">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-line bg-bg">
+                      <FolderUp className="size-4 text-muted" strokeWidth={1.6} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[12px] font-medium text-ink">
+                        Public file sharing
+                      </div>
+                      <p className="mt-1 text-[11px] leading-4 text-muted">
+                        A public upload and download space with image previews
+                        and browser video playback. Files stay on this machine
+                        across service and app restarts.
+                      </p>
+                    </div>
+                  </div>
+                  <ul className="mt-3 grid gap-1.5 border-t border-line pt-3 font-mono text-[10px] text-faint sm:grid-cols-2">
+                    <li>50 MB per file</li>
+                    <li>2 GB storage quota</li>
+                    <li>Video watch and download</li>
+                    <li>Not included in address backups</li>
+                  </ul>
+                </div>
+              ) : null}
+
               <div className="grid gap-2 sm:grid-cols-[1fr_1fr]">
                 <Field
                   label="Onion virtual port"
@@ -670,6 +918,41 @@ export function CreateServiceDialog({
                 </div>
               </div>
 
+              <div className="grid gap-2 sm:grid-cols-2">
+                <CheckRow
+                  checked={privateOnion}
+                  onChange={setPrivateOnion}
+                  label="Private onion"
+                  description="Require a client authorization key."
+                />
+                <CheckRow
+                  checked={pow}
+                  onChange={setPow}
+                  label="Proof-of-Work defenses"
+                  description="Ask browsers to solve a small challenge under load."
+                />
+              </div>
+
+              <Field
+                label="Max streams per circuit"
+                hint={maxStreams.trim() ? undefined : "unlimited"}
+              >
+                <input
+                  value={maxStreams}
+                  onChange={(event) => setMaxStreams(event.target.value)}
+                  inputMode="numeric"
+                  placeholder="0 or empty for unlimited"
+                  className={cn(inputClass, "font-mono text-[12px]")}
+                />
+              </Field>
+
+              {privateOnion ? (
+                <p className="rounded-lg border border-line bg-bg px-3 py-2 text-[11px] leading-4 text-muted">
+                  A client key will be generated when the service is created. Add
+                  it to Tor Browser before opening the onion address.
+                </p>
+              ) : null}
+
               {error ? (
                 <p className="rounded-lg border border-line bg-bg px-3 py-2 text-[11px] leading-4 text-muted">
                   {error}
@@ -693,7 +976,11 @@ export function CreateServiceDialog({
                           ? "Local server"
                           : kind === "tcp"
                             ? "TCP service"
-                            : "OnionHoster page"}
+                            : kind === "chat"
+                              ? "Public chat"
+                              : kind === "file_share"
+                                ? "File sharing"
+                                : "OnionHoster page"}
                     </p>
                   </div>
                   <span className="rounded-full border border-line px-2 py-1 font-mono text-[10px] text-faint">
@@ -742,6 +1029,56 @@ export function CreateServiceDialog({
                       <Copy className="size-3.5" strokeWidth={1.6} />
                     )}
                   </Button>
+                </div>
+              ) : null}
+
+              {service?.onion.private && clientAuth ? (
+                <div className="mt-3 rounded-lg border border-line bg-bg p-3">
+                  <div className="flex items-start gap-2.5">
+                    <ShieldCheck className="mt-0.5 size-4 shrink-0 text-ink" strokeWidth={1.6} />
+                    <div className="min-w-0">
+                      <div className="text-[12px] font-medium text-ink">
+                        Client authorization
+                      </div>
+                      <p className="mt-1 text-[11px] leading-4 text-muted">
+                        Save this key and add it to Tor Browser before opening
+                        the onion address.
+                      </p>
+                    </div>
+                  </div>
+                  {clientAuthLine ? (
+                    <code className="mt-2 block break-all rounded-md border border-line bg-surface px-2.5 py-2 font-mono text-[10px] leading-4 text-ink">
+                      {clientAuthLine}
+                    </code>
+                  ) : (
+                    <p className="mt-2 text-[11px] leading-4 text-faint">
+                      The key file will be ready once the onion address is published.
+                    </p>
+                  )}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={!clientAuthLine}
+                      onClick={() => void copyClientAuth()}
+                    >
+                      {copiedAuth ? (
+                        <Check className="size-3.5" strokeWidth={1.8} />
+                      ) : (
+                        <KeyRound className="size-3.5" strokeWidth={1.6} />
+                      )}
+                      {copiedAuth ? "Copied" : "Copy key"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={!clientAuthLine}
+                      onClick={downloadClientAuth}
+                    >
+                      <Download className="size-3.5" strokeWidth={1.6} />
+                      .auth_private
+                    </Button>
+                  </div>
                 </div>
               ) : null}
 

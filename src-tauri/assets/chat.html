@@ -1,0 +1,835 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Public chat · OnionHoster</title>
+<link rel="icon" type="image/svg+xml" href="/logo.svg">
+<style>
+:root{
+  color-scheme:light dark;
+  --bg:#f5f5f4;--surface:#ffffff;--raised:#fafafa;--ink:#0a0a0a;--muted:#5f5f5f;
+  --faint:#8a8a8a;--line:#dededb;--line-strong:#bdbdb8;--hover:#f0f0ee;--danger:#8a1f1f;
+  --shadow:0 18px 60px rgba(0,0,0,.14);
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#070707;--surface:#0e0e0e;--raised:#151515;--ink:#f4f4f2;--muted:#a3a3a0;
+  --faint:#777774;--line:#242422;--line-strong:#3a3a36;--hover:#1b1b19;--danger:#ff9b9b;
+  --shadow:0 18px 60px rgba(0,0,0,.55)}
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font:14px/1.55 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:inherit;text-underline-offset:3px}
+.app{display:flex;flex-direction:column;height:100dvh}
+.top{
+  position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;
+  gap:16px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--bg) 88%,transparent);
+  backdrop-filter:blur(12px);padding:12px max(18px,calc((100vw - 900px)/2));
+}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.mark{display:block;width:34px;height:34px;border:1px solid var(--line);border-radius:10px;background:#0a0a0a;overflow:hidden;flex:none}
+.mark img{display:block;width:100%;height:100%}
+.brand h1{margin:0;font-size:13px;font-weight:600;letter-spacing:-.01em;white-space:nowrap}
+.brand p{margin:1px 0 0;font:10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint);white-space:nowrap}
+.status{display:flex;align-items:center;gap:14px;flex:none;font:10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted)}
+.live,.online{display:inline-flex;align-items:center;gap:6px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.dot.on{background:var(--ink)}
+.wrap{width:100%;max-width:900px;margin:0 auto;padding:0 18px;display:flex;flex-direction:column;flex:1;min-height:0}
+.notice{
+  margin:16px 0 0;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--surface);
+  color:var(--muted);font-size:12px;display:flex;gap:9px;align-items:flex-start;flex:none;
+}
+.notice strong{color:var(--ink);font-weight:600}
+.notice svg{flex:none;margin-top:2px}
+.older-row{display:flex;justify-content:center;padding:14px 0 4px;flex:none}
+.older{
+  border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;
+  font:10px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);
+}
+.older:hover{border-color:var(--line-strong);color:var(--ink)}
+.messages{flex:1;min-height:0;overflow-y:auto;padding:12px 2px 18px;scroll-behavior:smooth;overscroll-behavior:contain}
+.empty{margin:12vh auto 0;max-width:380px;text-align:center;color:var(--faint);padding:0 16px}
+.empty .ring{width:44px;height:44px;margin:0 auto 14px;border:1px solid var(--line);border-radius:50%;display:grid;place-items:center}
+.empty h2{margin:0 0 6px;font-size:14px;font-weight:600;color:var(--ink)}
+.empty p{margin:0;font-size:12px;line-height:1.65}
+.msg{display:flex;flex-direction:column;align-items:flex-start;margin:0 0 16px;max-width:100%}
+.msg.mine{align-items:flex-end}
+.meta{display:flex;align-items:center;gap:8px;margin:0 2px 5px;font:10px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint);max-width:100%}
+.meta .author{color:var(--muted);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:52vw}
+.msg.mine .meta .author{color:var(--ink)}
+.meta .del{border:0;background:transparent;padding:0;color:var(--faint);font:10px ui-monospace,monospace;text-decoration:underline;text-underline-offset:2px}
+.meta .del:hover{color:var(--danger)}
+.bubble{
+  max-width:min(620px,86%);border:1px solid var(--line);background:var(--surface);border-radius:13px;
+  padding:9px 12px;overflow:hidden;
+}
+.msg.mine .bubble{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.body{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13.5px;line-height:1.6}
+.body:empty{display:none}
+.attachment{margin-top:0}
+.body + .attachment{margin-top:9px}
+.image-button{
+  display:block;border:0;padding:0;background:transparent;border-radius:9px;overflow:hidden;
+  max-width:100%;line-height:0;position:relative;
+}
+.image-button img{display:block;max-width:min(340px,100%);max-height:230px;width:auto;height:auto;object-fit:cover;border-radius:9px;background:var(--raised)}
+.video-preview{
+  position:relative;display:block;border:0;padding:0;background:transparent;border-radius:9px;overflow:hidden;
+  max-width:min(360px,100%);line-height:0;
+}
+.video-preview video{display:block;width:100%;max-height:230px;object-fit:cover;border-radius:9px;background:#000;pointer-events:none}
+.play{
+  position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.28);
+}
+.play span{
+  display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.94);
+  color:#0a0a0a;box-shadow:0 2px 12px rgba(0,0,0,.2);
+}
+.file-card{
+  display:flex;align-items:center;gap:10px;min-width:min(320px,100%);max-width:min(380px,100%);
+  border:1px solid var(--line);border-radius:9px;padding:9px 10px;background:var(--raised);color:var(--ink);
+  text-decoration:none;
+}
+.msg.mine .file-card{border-color:color-mix(in srgb,var(--bg) 28%,transparent);background:color-mix(in srgb,var(--bg) 10%,transparent);color:var(--bg)}
+.file-icon{display:grid;place-items:center;width:32px;height:32px;border:1px solid var(--line);border-radius:7px;background:var(--surface);flex:none;color:var(--muted)}
+.msg.mine .file-icon{border-color:color-mix(in srgb,var(--bg) 28%,transparent);background:color-mix(in srgb,var(--bg) 8%,transparent);color:var(--bg)}
+.file-text{min-width:0;flex:1}
+.file-name{display:block;font-size:11.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-size{display:block;margin-top:2px;font:9.5px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint)}
+.msg.mine .file-size{color:color-mix(in srgb,var(--bg) 62%,transparent)}
+.download{flex:none;color:var(--muted);display:grid;place-items:center}
+.msg.mine .download{color:var(--bg)}
+.composer-wrap{position:sticky;bottom:0;background:linear-gradient(to top,var(--bg) 72%,transparent);padding:8px 0 max(14px,env(safe-area-inset-bottom));flex:none}
+.composer{border:1px solid var(--line);background:var(--surface);border-radius:14px;box-shadow:0 0 0 1px transparent;overflow:hidden}
+.composer:focus-within{border-color:var(--line-strong)}
+.composer-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--raised)}
+.name-wrap{display:flex;align-items:center;gap:7px;min-width:0}
+.name-wrap label{font:9.5px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint);flex:none}
+.name-input{height:26px;width:min(220px,42vw);border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:0 8px;font-size:11px;outline:none}
+.name-input:focus{border-color:var(--line-strong)}
+.identity{font:9.5px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.attach-row{display:flex;align-items:center;gap:9px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--raised);font-size:11px}
+.attach-row[hidden]{display:none}
+.attach-name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.attach-size{font:9.5px ui-monospace,monospace;color:var(--faint);flex:none}
+.attach-remove{border:0;background:transparent;color:var(--faint);padding:2px;display:grid;place-items:center}
+.attach-remove:hover{color:var(--ink)}
+.input-row{display:flex;align-items:flex-end;gap:7px;padding:8px}
+textarea{
+  flex:1;min-height:38px;max-height:150px;resize:none;border:0;background:transparent;outline:none;
+  padding:8px 4px;font-size:13.5px;line-height:1.45;
+}
+textarea::placeholder{color:var(--faint)}
+.icon-btn{
+  display:grid;place-items:center;width:36px;height:36px;flex:none;border:1px solid transparent;border-radius:9px;
+  background:transparent;color:var(--muted);
+}
+.icon-btn:hover{background:var(--hover);color:var(--ink)}
+.send{
+  display:inline-flex;align-items:center;gap:6px;height:36px;flex:none;border:1px solid var(--ink);
+  background:var(--ink);color:var(--bg);border-radius:9px;padding:0 13px;font-size:11.5px;font-weight:600;
+}
+.send:disabled{opacity:.4;cursor:default}
+.send svg{width:14px;height:14px}
+.footer-line{display:flex;justify-content:space-between;gap:12px;padding:7px 4px 0;font:9.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint)}
+.error{color:var(--danger);font-size:11px;padding:0 12px 8px}
+.error:empty{display:none}
+.lightbox{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.82);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px}
+.lightbox[hidden]{display:none}
+.lightbox-inner{width:min(980px,100%);max-height:92dvh;display:flex;flex-direction:column;gap:10px}
+.lightbox-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;color:#f4f4f2;font-size:11px;min-width:0}
+.lightbox-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.lightbox-actions{display:flex;align-items:center;gap:8px;flex:none}
+.lightbox-actions a,.lightbox-actions button{
+  display:grid;place-items:center;width:32px;height:32px;border:1px solid rgba(255,255,255,.22);
+  border-radius:8px;background:rgba(255,255,255,.06);color:#f4f4f2;text-decoration:none;
+}
+.lightbox-body{min-height:0;display:flex;align-items:center;justify-content:center;background:#000;border-radius:10px;overflow:hidden}
+.lightbox-body img{max-width:100%;max-height:82dvh;object-fit:contain;display:block}
+.lightbox-body video{width:100%;max-height:82dvh;display:block;background:#000}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media (max-width:620px){
+  .top{padding:10px 14px}
+  .wrap{padding:0 12px}
+  .status{gap:9px}
+  .online-label{display:none}
+  .bubble{max-width:90%}
+  .name-input{width:130px}
+  .footer-line span:last-child{display:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">
+        <img src="/logo.svg" alt="">
+      </span>
+      <div>
+        <h1>Public chat</h1>
+        <p>Served by OnionHoster</p>
+      </div>
+    </div>
+    <div class="status">
+      <span class="live"><span id="live-dot" class="dot"></span><span id="live-label">Connecting</span></span>
+      <span class="online"><span class="dot on"></span><span id="online-count">0</span><span class="online-label">online</span></span>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="notice">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.5"/>
+      </svg>
+      <span><strong>One public room.</strong> Everyone with this onion address can read messages and download attachments. Messages and files are stored on the host machine.</span>
+    </div>
+
+    <div class="older-row" id="older-row" hidden>
+      <button class="older" id="older" type="button">Load older messages</button>
+    </div>
+
+    <main class="messages" id="messages" aria-live="polite" aria-label="Chat messages">
+      <div class="empty" id="empty">
+        <div class="ring" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 12a8 8 0 0 1-8 8H6l-3 2 1.2-4.2A8 8 0 1 1 21 12Z"/>
+          </svg>
+        </div>
+        <h2>No messages yet</h2>
+        <p>Write the first message. Attach an image or video for a compact preview.</p>
+      </div>
+    </main>
+
+    <div class="composer-wrap">
+      <div class="composer">
+        <div class="composer-top">
+          <div class="name-wrap">
+            <label for="name">Name</label>
+            <input class="name-input" id="name" maxlength="32" placeholder="Optional display name" autocomplete="nickname">
+          </div>
+          <span class="identity" id="identity">anonymous</span>
+        </div>
+        <div class="attach-row" id="attach-row" hidden>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+            <path d="m21.4 11.6-8.9 8.9a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 1 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/>
+          </svg>
+          <span class="attach-name" id="attach-name"></span>
+          <span class="attach-size" id="attach-size"></span>
+          <button class="attach-remove" id="attach-remove" type="button" aria-label="Remove attachment" title="Remove attachment">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+          </button>
+        </div>
+        <div class="input-row">
+          <label class="icon-btn" title="Attach a file" aria-label="Attach a file">
+            <input id="file" type="file" hidden>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+              <path d="m21.4 11.6-8.9 8.9a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 1 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/>
+            </svg>
+          </label>
+          <textarea id="body" rows="1" maxlength="2000" placeholder="Write a message..." aria-label="Message"></textarea>
+          <button class="send" id="send" type="button">
+            <span id="send-label">Send</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z"/></svg>
+          </button>
+        </div>
+        <div class="error" id="error" role="alert"></div>
+      </div>
+      <div class="footer-line">
+        <span>25 MB per file · 1 GB storage · no transcoding</span>
+        <span>Messages are not included in address backups</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="lightbox" id="lightbox" hidden>
+  <div class="lightbox-inner" role="dialog" aria-modal="true" aria-label="Attachment preview">
+    <div class="lightbox-bar">
+      <span class="lightbox-name" id="lightbox-name"></span>
+      <span class="lightbox-actions">
+        <a id="lightbox-download" href="#" download title="Download" aria-label="Download">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 19h16"/></svg>
+        </a>
+        <button id="lightbox-close" type="button" title="Close" aria-label="Close">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+      </span>
+    </div>
+    <div class="lightbox-body" id="lightbox-body"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const MAX_FILE = 25 * 1024 * 1024;
+  const MAX_BODY = 2000;
+  const clientId = getClientId();
+  const messages = [];
+  const seen = new Set();
+  let oldest = null;
+  let hasOlder = false;
+  let sending = false;
+  let selectedFile = null;
+  let socket = null;
+  let reconnectTimer = null;
+  let reconnectAttempt = 0;
+  let nearBottom = true;
+
+  const $ = (id) => document.getElementById(id);
+  const list = $("messages");
+  const empty = $("empty");
+  const olderRow = $("older-row");
+  const older = $("older");
+  const nameInput = $("name");
+  const body = $("body");
+  const fileInput = $("file");
+  const attachRow = $("attach-row");
+  const attachName = $("attach-name");
+  const attachSize = $("attach-size");
+  const attachRemove = $("attach-remove");
+  const sendButton = $("send");
+  const sendLabel = $("send-label");
+  const errorLine = $("error");
+  const identityLine = $("identity");
+  const liveDot = $("live-dot");
+  const liveLabel = $("live-label");
+  const onlineCount = $("online-count");
+  const lightbox = $("lightbox");
+  const lightboxBody = $("lightbox-body");
+  const lightboxName = $("lightbox-name");
+  const lightboxDownload = $("lightbox-download");
+
+  nameInput.value = localStorage.getItem("onionhoster.chat.name") || "";
+  nameInput.addEventListener("input", () => {
+    localStorage.setItem("onionhoster.chat.name", nameInput.value);
+  });
+
+  function getClientId() {
+    const existing = localStorage.getItem("onionhoster.chat.client");
+    if (existing && /^[A-Za-z0-9_-]{8,80}$/.test(existing)) {
+      return existing;
+    }
+    const created = newId();
+    localStorage.setItem("onionhoster.chat.client", created);
+    return created;
+  }
+
+  function newId() {
+    if (crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + " MB";
+    return (bytes / 1024 / 1024 / 1024).toFixed(2) + " GB";
+  }
+
+  function formatTime(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const sameDay = date.toDateString() === now.toDateString();
+    const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return sameDay ? time : date.toLocaleDateString([], { month: "short", day: "numeric" }) + " " + time;
+  }
+
+  function setError(message) {
+    errorLine.textContent = message || "";
+  }
+
+  function setLive(text, on) {
+    liveLabel.textContent = text;
+    liveDot.classList.toggle("on", Boolean(on));
+  }
+
+  function setOnline(count) {
+    onlineCount.textContent = String(count);
+  }
+
+  function scrollToBottom() {
+    list.scrollTop = list.scrollHeight;
+    nearBottom = true;
+  }
+
+  function updateEmpty() {
+    empty.hidden = messages.length > 0;
+  }
+
+  function updateOlder() {
+    olderRow.hidden = !hasOlder;
+  }
+
+  function svg(paths, width) {
+    const node = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    node.setAttribute("viewBox", "0 0 24 24");
+    node.setAttribute("fill", "none");
+    node.setAttribute("stroke", "currentColor");
+    node.setAttribute("stroke-width", "1.7");
+    node.setAttribute("width", String(width || 15));
+    node.setAttribute("height", String(width || 15));
+    node.setAttribute("aria-hidden", "true");
+    for (const d of paths) {
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", d);
+      node.appendChild(path);
+    }
+    return node;
+  }
+
+  function fileIcon() {
+    const span = document.createElement("span");
+    span.className = "file-icon";
+    span.appendChild(svg(["M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z", "M14 3v5h5"], 15));
+    return span;
+  }
+
+  function attachmentNode(message) {
+    const attachment = message.attachment;
+    if (!attachment) return null;
+
+    if (attachment.kind === "image") {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "image-button";
+      button.title = "Open full size";
+      button.setAttribute("aria-label", "Open " + attachment.fileName);
+      const image = document.createElement("img");
+      image.src = attachment.url;
+      image.alt = attachment.fileName;
+      image.loading = "lazy";
+      button.appendChild(image);
+      button.addEventListener("click", () => openLightbox(attachment));
+      return button;
+    }
+
+    if (attachment.kind === "video") {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "video-preview";
+      button.title = "Watch video";
+      button.setAttribute("aria-label", "Watch " + attachment.fileName);
+      const video = document.createElement("video");
+      video.src = attachment.url;
+      video.preload = "metadata";
+      video.playsInline = true;
+      video.muted = true;
+      button.appendChild(video);
+      const overlay = document.createElement("span");
+      overlay.className = "play";
+      const circle = document.createElement("span");
+      circle.appendChild(svg(["M8 5v14l11-7Z"], 17));
+      overlay.appendChild(circle);
+      button.appendChild(overlay);
+      button.addEventListener("click", () => openLightbox(attachment));
+      return button;
+    }
+
+    const link = document.createElement("a");
+    link.className = "file-card";
+    link.href = attachment.downloadUrl;
+    link.download = attachment.fileName;
+    link.appendChild(fileIcon());
+    const text = document.createElement("span");
+    text.className = "file-text";
+    const name = document.createElement("span");
+    name.className = "file-name";
+    name.textContent = attachment.fileName;
+    const size = document.createElement("span");
+    size.className = "file-size";
+    size.textContent = formatSize(attachment.size);
+    text.append(name, size);
+    link.appendChild(text);
+    const download = document.createElement("span");
+    download.className = "download";
+    download.appendChild(svg(["M12 3v12m0 0 4-4m-4 4-4-4M4 19h16"], 15));
+    link.appendChild(download);
+    return link;
+  }
+
+  function messageNode(message) {
+    const article = document.createElement("article");
+    article.className = "msg" + (message.clientId === clientId ? " mine" : "");
+    article.dataset.id = message.id;
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    const author = document.createElement("span");
+    author.className = "author";
+    author.textContent = message.author;
+    author.title = message.author;
+    const time = document.createElement("time");
+    time.dateTime = new Date(message.createdAt).toISOString();
+    time.textContent = formatTime(message.createdAt);
+    meta.append(author, time);
+
+    if (message.clientId === clientId) {
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "del";
+      remove.textContent = "delete";
+      remove.title = "Delete message";
+      remove.addEventListener("click", () => deleteMessage(message.id));
+      meta.appendChild(remove);
+    }
+
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    if (message.body) {
+      const text = document.createElement("div");
+      text.className = "body";
+      text.textContent = message.body;
+      bubble.appendChild(text);
+    }
+    const attachment = attachmentNode(message);
+    if (attachment) {
+      const wrap = document.createElement("div");
+      wrap.className = "attachment";
+      wrap.appendChild(attachment);
+      bubble.appendChild(wrap);
+    }
+
+    article.append(meta, bubble);
+    return article;
+  }
+
+  function appendMessage(message, afterHistory) {
+    if (!message || !message.id || seen.has(message.id)) return;
+    seen.add(message.id);
+    messages.push(message);
+    if (!oldest || message.createdAt < oldest.createdAt) {
+      oldest = { createdAt: message.createdAt, id: message.id };
+    }
+    list.appendChild(messageNode(message));
+    updateEmpty();
+    if (!afterHistory || nearBottom) {
+      scrollToBottom();
+    }
+  }
+
+  function prependMessages(items) {
+    const fragment = document.createDocumentFragment();
+    const added = [];
+    for (const message of items) {
+      if (!message || seen.has(message.id)) continue;
+      seen.add(message.id);
+      added.push(message);
+      fragment.appendChild(messageNode(message));
+    }
+    if (added.length) {
+      messages.unshift(...added);
+      if (!oldest || added[0].createdAt < oldest.createdAt) {
+        oldest = { createdAt: added[0].createdAt, id: added[0].id };
+      }
+    }
+    empty.after(fragment);
+    updateEmpty();
+  }
+
+  function replaceMessages(items) {
+    const shouldScroll = nearBottom;
+    messages.length = 0;
+    seen.clear();
+    oldest = null;
+    hasOlder = items.length >= 100;
+    for (const child of Array.from(list.querySelectorAll(".msg"))) {
+      child.remove();
+    }
+    const fragment = document.createDocumentFragment();
+    for (const message of items) {
+      if (!message || seen.has(message.id)) continue;
+      seen.add(message.id);
+      messages.push(message);
+      if (!oldest || message.createdAt < oldest.createdAt) {
+        oldest = { createdAt: message.createdAt, id: message.id };
+      }
+      fragment.appendChild(messageNode(message));
+    }
+    empty.after(fragment);
+    updateEmpty();
+    updateOlder();
+    if (shouldScroll) scrollToBottom();
+  }
+
+  function removeMessage(id) {
+    const index = messages.findIndex((message) => message.id === id);
+    if (index >= 0) messages.splice(index, 1);
+    seen.delete(id);
+    const node = list.querySelector('.msg[data-id="' + CSS.escape(id) + '"]');
+    if (node) node.remove();
+    if (oldest && oldest.id === id) {
+      oldest = messages.length
+        ? messages.reduce((left, right) =>
+            left.createdAt <= right.createdAt ? left : right
+          )
+        : null;
+    }
+    updateEmpty();
+  }
+
+  async function deleteMessage(id) {
+    if (!window.confirm("Delete this message?")) return;
+    try {
+      const response = await fetch(
+        "/api/chat/messages/" + encodeURIComponent(id) + "?client=" + encodeURIComponent(clientId),
+        { method: "DELETE" }
+      );
+      if (!response.ok && response.status !== 404) {
+        throw new Error(await response.text());
+      }
+      removeMessage(id);
+    } catch (error) {
+      setError("Could not delete the message: " + error.message);
+    }
+  }
+
+  async function loadOlder() {
+    if (!oldest) return;
+    older.disabled = true;
+    older.textContent = "Loading...";
+    try {
+      const url =
+        "/api/chat/messages?limit=50&before=" +
+        encodeURIComponent(oldest.createdAt) +
+        "&beforeId=" +
+        encodeURIComponent(oldest.id);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(await response.text());
+      const payload = await response.json();
+      const items = payload.messages || [];
+      const height = list.scrollHeight;
+      prependMessages(items);
+      hasOlder = items.length >= 50;
+      updateOlder();
+      list.scrollTop = list.scrollHeight - height;
+    } catch (error) {
+      setError("Could not load older messages: " + error.message);
+    } finally {
+      older.disabled = false;
+      older.textContent = "Load older messages";
+    }
+  }
+
+  function openLightbox(attachment) {
+    lightboxBody.replaceChildren();
+    lightboxName.textContent = attachment.fileName;
+    lightboxDownload.href = attachment.downloadUrl;
+    lightboxDownload.setAttribute("download", attachment.fileName);
+    if (attachment.kind === "image") {
+      const image = document.createElement("img");
+      image.src = attachment.url;
+      image.alt = attachment.fileName;
+      lightboxBody.appendChild(image);
+    } else if (attachment.kind === "video") {
+      const video = document.createElement("video");
+      video.src = attachment.url;
+      video.controls = true;
+      video.autoplay = true;
+      video.playsInline = true;
+      lightboxBody.appendChild(video);
+    }
+    lightbox.hidden = false;
+    $("lightbox-close").focus();
+  }
+
+  function closeLightbox() {
+    lightbox.hidden = true;
+    lightboxBody.replaceChildren();
+  }
+
+  function setFile(file) {
+    setError("");
+    if (!file) return;
+    if (file.size > MAX_FILE) {
+      setError("Chat files can be at most 25 MB.");
+      return;
+    }
+    selectedFile = file;
+    attachName.textContent = file.name;
+    attachSize.textContent = formatSize(file.size);
+    attachRow.hidden = false;
+  }
+
+  function clearFile() {
+    selectedFile = null;
+    fileInput.value = "";
+    attachRow.hidden = true;
+    attachName.textContent = "";
+    attachSize.textContent = "";
+  }
+
+  function autoGrow() {
+    body.style.height = "auto";
+    body.style.height = Math.min(body.scrollHeight, 150) + "px";
+  }
+
+  async function send() {
+    if (sending) return;
+    const text = body.value.trim();
+    if (!text && !selectedFile) {
+      setError("Write a message or attach a file.");
+      return;
+    }
+    if (text.length > MAX_BODY) {
+      setError("Messages can be at most 2000 characters.");
+      return;
+    }
+
+    setError("");
+    sending = true;
+    sendButton.disabled = true;
+    sendLabel.textContent = selectedFile ? "Uploading" : "Sending";
+
+    try {
+      let response;
+      if (selectedFile) {
+        const form = new FormData();
+        form.append("clientId", clientId);
+        form.append("name", nameInput.value.trim());
+        form.append("body", text);
+        form.append("file", selectedFile, selectedFile.name);
+        response = await fetch("/api/chat/files", { method: "POST", body: form });
+      } else {
+        response = await fetch("/api/chat/messages", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ clientId, name: nameInput.value.trim(), body: text }),
+        });
+      }
+
+      if (!response.ok) {
+        throw new Error((await response.text()) || "The message could not be sent.");
+      }
+      const message = await response.json();
+      appendMessage(message, false);
+      body.value = "";
+      autoGrow();
+      clearFile();
+      scrollToBottom();
+    } catch (error) {
+      setError(error.message || "The message could not be sent.");
+    } finally {
+      sending = false;
+      sendButton.disabled = false;
+      sendLabel.textContent = "Send";
+    }
+  }
+
+  function connect() {
+    if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+    clearTimeout(reconnectTimer);
+    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+    const next = new WebSocket(protocol + "//" + location.host + "/ws");
+    socket = next;
+    setLive(reconnectAttempt === 0 ? "Connecting" : "Reconnecting", false);
+
+    next.addEventListener("open", () => {
+      reconnectAttempt = 0;
+      setLive("Live", true);
+    });
+
+    next.addEventListener("message", (event) => {
+      let payload;
+      try {
+        payload = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (payload.type === "history") {
+        setOnline(payload.online || 0);
+        replaceMessages(payload.messages || []);
+      } else if (payload.type === "message") {
+        appendMessage(payload.message, true);
+      } else if (payload.type === "deleted") {
+        removeMessage(payload.id);
+      } else if (payload.type === "presence") {
+        setOnline(payload.online || 0);
+      }
+    });
+
+    next.addEventListener("close", () => {
+      socket = null;
+      setLive("Reconnecting", false);
+      const delay = Math.min(1500 * Math.pow(1.7, reconnectAttempt), 15000);
+      reconnectAttempt += 1;
+      reconnectTimer = setTimeout(connect, delay);
+    });
+
+    next.addEventListener("error", () => {
+      try { next.close(); } catch { /* ignore */ }
+    });
+  }
+
+  async function loadIdentity() {
+    try {
+      const response = await fetch("/api/chat/identity?client=" + encodeURIComponent(clientId));
+      if (!response.ok) return;
+      const payload = await response.json();
+      identityLine.textContent = payload.label || "anonymous";
+    } catch {
+      identityLine.textContent = "anonymous";
+    }
+  }
+
+  list.addEventListener("scroll", () => {
+    nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 140;
+  });
+
+  older.addEventListener("click", loadOlder);
+  attachRemove.addEventListener("click", clearFile);
+  fileInput.addEventListener("change", () => setFile(fileInput.files && fileInput.files[0]));
+  sendButton.addEventListener("click", send);
+
+  body.addEventListener("input", autoGrow);
+  body.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      send();
+    }
+  });
+
+  $("lightbox-close").addEventListener("click", closeLightbox);
+  lightbox.addEventListener("mousedown", (event) => {
+    if (event.target === lightbox) closeLightbox();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !lightbox.hidden) closeLightbox();
+  });
+
+  list.addEventListener("dragover", (event) => {
+    if (event.dataTransfer && Array.from(event.dataTransfer.types).includes("Files")) {
+      event.preventDefault();
+    }
+  });
+  list.addEventListener("drop", (event) => {
+    if (event.dataTransfer && event.dataTransfer.files.length) {
+      event.preventDefault();
+      setFile(event.dataTransfer.files[0]);
+    }
+  });
+
+  updateEmpty();
+  updateOlder();
+  autoGrow();
+  loadIdentity();
+  connect();
+})();
+</script>
+</body>
+</html>
