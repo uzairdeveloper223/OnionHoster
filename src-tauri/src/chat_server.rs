@@ -646,7 +646,7 @@ async fn socket_loop(socket: WebSocket, context: ChatContext) {
 fn finish_socket(context: &ChatContext) {
     let online = context
         .online
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
             Some(value.saturating_sub(1))
         })
         .map(|value| value.saturating_sub(1))
