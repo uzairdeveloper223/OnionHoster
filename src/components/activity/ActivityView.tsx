@@ -41,7 +41,7 @@ export function ActivityView() {
       </section>
 
       <p className="mt-4 text-[11px] leading-5 text-faint">
-        Private keys, bridge lines, and tunnel tokens are removed from the event stream.
+        Private keys, bridge lines, and tunnel tokens will be removed from the event stream.
       </p>
     </div>
   );

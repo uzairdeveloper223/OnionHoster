@@ -47,7 +47,7 @@ export function ServicesView() {
             <OnionMark className="size-8" />
           </div>
           <h2 className="text-lg font-medium tracking-tight text-ink">No services yet</h2>
-          <p className="mt-2 max-w-md text-sm leading-6 text-muted">
+          <p className="mt-2 max-w-lg text-sm leading-6 text-balance text-muted">
             Publish a static folder, a running local server, or a TCP port through Tor.
           </p>
           <Button
