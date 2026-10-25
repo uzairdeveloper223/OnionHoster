@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Host local websites and TCP services on Tor."
 authors = ["Uzair"]
 license = "GPL-3.0-or-later"
-edition = "2024"
+edition = "2026"
 
 [lib]
 name = "onionhoster_lib"
