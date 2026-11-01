@@ -43,9 +43,7 @@ pub fn appimage_active() -> bool {
     // or is inside a typical AppImage mount directory.
     if let Ok(exe) = std::env::current_exe() {
         let path_str = exe.to_string_lossy();
-        if path_str.contains(".AppImage")
-            || path_str.contains("/tmp/.mount_")
-        {
+        if path_str.contains(".AppImage") || path_str.contains("/tmp/.mount_") {
             return true;
         }
     }
@@ -58,10 +56,8 @@ pub fn detect_install_type() -> InstallType {
         return InstallType::Appimage;
     }
     // Deb packages install the binary at /usr/bin/onionhoster.
-    if let Ok(exe) = std::env::current_exe() {
-        if exe.starts_with("/usr") {
-            return InstallType::Deb;
-        }
+    if std::env::current_exe().is_ok_and(|exe| exe.starts_with("/usr")) {
+        return InstallType::Deb;
     }
     // Everything else (portable tarball, running from build dir, etc.)
     InstallType::Tarball

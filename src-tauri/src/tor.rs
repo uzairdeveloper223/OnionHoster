@@ -1049,9 +1049,7 @@ fn read_response(reader: &mut BufReader<TcpStream>) -> Result<Vec<String>, Strin
 
     loop {
         if lines.len() >= MAX_RESPONSE_LINES {
-            return Err(
-                "Tor control response exceeded the maximum number of lines.".to_string(),
-            );
+            return Err("Tor control response exceeded the maximum number of lines.".to_string());
         }
 
         let mut line = String::new();

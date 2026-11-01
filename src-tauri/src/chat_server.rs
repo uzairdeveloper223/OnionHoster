@@ -93,7 +93,6 @@ struct HistoryQuery {
 struct ClientQuery {
     client: Option<String>,
     download: Option<String>,
-    token: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -200,8 +199,14 @@ fn initialize(connection: &Connection) -> Result<(), String> {
         .map_err(|error| format!("Could not initialize the chat database: {error}"))?;
 
     // Migrate existing databases that lack the new columns.
-    let _ = connection.execute("ALTER TABLE messages ADD COLUMN client_hash TEXT NOT NULL DEFAULT ''", []);
-    let _ = connection.execute("ALTER TABLE messages ADD COLUMN author_token_hash TEXT NOT NULL DEFAULT ''", []);
+    let _ = connection.execute(
+        "ALTER TABLE messages ADD COLUMN client_hash TEXT NOT NULL DEFAULT ''",
+        [],
+    );
+    let _ = connection.execute(
+        "ALTER TABLE messages ADD COLUMN author_token_hash TEXT NOT NULL DEFAULT ''",
+        [],
+    );
 
     Ok(())
 }
@@ -513,7 +518,13 @@ async fn delete_message(
                  LEFT JOIN attachments a ON a.message_id = m.id
                  WHERE m.id = ?1",
                 params![id],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, Option<String>>(2)?)),
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                    ))
+                },
             )
             .optional()
     };
@@ -700,8 +711,9 @@ async fn socket_loop(socket: WebSocket, context: ChatContext) {
 fn finish_socket(context: &ChatContext) {
     let online = match context
         .online
-        .try_update(Ordering::Relaxed, Ordering::Relaxed, |value| value.checked_sub(1))
-    {
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+            value.checked_sub(1)
+        }) {
         Ok(value) => value,
         Err(current) => current.saturating_sub(1),
     };

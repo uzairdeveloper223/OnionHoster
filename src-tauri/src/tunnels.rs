@@ -737,23 +737,15 @@ impl TunnelManager {
     }
 
     fn redact(&self, id: &str, message: &str) -> String {
-        let state = self
-            .state
-            .lock()
-            .expect("tunnel state lock poisoned");
-        let tunnel = state
-            .tunnels
-            .iter()
-            .find(|tunnel| tunnel.id == id);
+        let state = self.state.lock().expect("tunnel state lock poisoned");
+        let tunnel = state.tunnels.iter().find(|tunnel| tunnel.id == id);
 
         let mut result = message.to_string();
 
         if let Some(tunnel) = tunnel {
             // Redact the Cloudflare token if present.
-            if let Some(ref token) = tunnel.token {
-                if !token.is_empty() {
-                    result = result.replace(token, "[redacted]");
-                }
+            if let Some(token) = tunnel.token.as_deref().filter(|t| !t.is_empty()) {
+                result = result.replace(token, "[redacted]");
             }
             // Redact any argument from the custom command that looks like a
             // token or secret (at least 16 alphanumeric characters, or values

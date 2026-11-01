@@ -120,7 +120,10 @@ fn initialize(connection: &Connection) -> Result<(), String> {
         .map_err(|error| format!("Could not initialize the file-sharing database: {error}"))?;
 
     // Migrate existing databases that lack the new column.
-    let _ = connection.execute("ALTER TABLE files ADD COLUMN client_hash TEXT NOT NULL DEFAULT ''", []);
+    let _ = connection.execute(
+        "ALTER TABLE files ADD COLUMN client_hash TEXT NOT NULL DEFAULT ''",
+        [],
+    );
 
     Ok(())
 }
@@ -362,7 +365,13 @@ async fn remove(
             .query_row(
                 "SELECT client_id, client_hash, storage_name FROM files WHERE id = ?1",
                 params![id],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?)),
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
             )
             .optional()
     };
