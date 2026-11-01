@@ -737,19 +737,51 @@ impl TunnelManager {
     }
 
     fn redact(&self, id: &str, message: &str) -> String {
-        let token = self
+        let state = self
             .state
             .lock()
-            .expect("tunnel state lock poisoned")
+            .expect("tunnel state lock poisoned");
+        let tunnel = state
             .tunnels
             .iter()
-            .find(|tunnel| tunnel.id == id)
-            .and_then(|tunnel| tunnel.token.clone());
+            .find(|tunnel| tunnel.id == id);
 
-        match token {
-            Some(token) if !token.is_empty() => message.replace(&token, "[redacted]"),
-            _ => message.to_string(),
+        let mut result = message.to_string();
+
+        if let Some(tunnel) = tunnel {
+            // Redact the Cloudflare token if present.
+            if let Some(ref token) = tunnel.token {
+                if !token.is_empty() {
+                    result = result.replace(token, "[redacted]");
+                }
+            }
+            // Redact any argument from the custom command that looks like a
+            // token or secret (at least 16 alphanumeric characters, or values
+            // preceded by common credential flags).
+            if let Some(ref command) = tunnel.custom_command {
+                let mut redact_next = false;
+                for part in command.split_whitespace() {
+                    if redact_next {
+                        if !part.is_empty() && !part.starts_with('-') {
+                            result = result.replace(part, "[redacted]");
+                        }
+                        redact_next = false;
+                        continue;
+                    }
+                    let lower = part.to_lowercase();
+                    if lower.ends_with("token")
+                        || lower.ends_with("secret")
+                        || lower.ends_with("key")
+                        || lower.ends_with("password")
+                        || lower.ends_with("credentials")
+                    {
+                        redact_next = true;
+                    }
+                }
+            }
         }
+
+        result
     }
 
     fn handle_output(

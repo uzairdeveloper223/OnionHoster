@@ -3,6 +3,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import {
   Check,
   CircleAlert,
+  ClipboardCopy,
   Download,
   Moon,
   Play,
@@ -19,6 +20,7 @@ import { ProgressBar } from "@/components/ui/ProgressBar";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { APP_VERSION } from "@/lib/app";
 import { exportBackup, importBackup } from "@/lib/backup";
+import { copyText } from "@/lib/clipboard";
 import { torLabel, torTone } from "@/lib/tor";
 import { cn } from "@/lib/utils";
 import { useRuntimeStore } from "@/stores/runtime";
@@ -27,6 +29,7 @@ import { useTorStore } from "@/stores/tor";
 import { useTunnelStore } from "@/stores/tunnels";
 import { useUpdateStore } from "@/stores/updates";
 import type { Theme } from "@/types";
+import type { InstallType } from "@/lib/runtime";
 
 const inputClass =
   "h-9 w-full rounded-md border border-line bg-bg px-2.5 text-[13px] text-ink outline-none transition-colors placeholder:text-faint focus:border-line-strong disabled:opacity-45";
@@ -60,6 +63,69 @@ function SettingRow({
 
 function Value({ children }: { children: ReactNode }) {
   return <span className="font-mono text-[11px] text-ink">{children}</span>;
+}
+
+const REPO = "uzairdeveloper223/OnionHoster";
+
+function installTypeLabel(type: InstallType | undefined): string {
+  switch (type) {
+    case "appimage":
+      return "AppImage";
+    case "deb":
+      return "Deb package";
+    case "tarball":
+      return "Portable tarball";
+    default:
+      return "Unknown";
+  }
+}
+
+function debUpdateCommand(version: string): string {
+  const file = `onionhoster_${version}_amd64.deb`;
+  return `curl -fSL "https://github.com/${REPO}/releases/download/v${version}/${file}" -o /tmp/${file} && sudo dpkg -i /tmp/${file} && rm /tmp/${file} && echo "✓ OnionHoster ${version} installed. Please relaunch the app."`;
+}
+
+function tarballUpdateCommand(version: string): string {
+  const file = `OnionHoster_${version}_linux_x86_64.tar.gz`;
+  return `curl -fSL "https://github.com/${REPO}/releases/download/v${version}/${file}" -o /tmp/${file} && cd /tmp && tar -xzf ${file} && chmod +x "OnionHoster_${version}_linux_x86_64/install.sh" && "OnionHoster_${version}_linux_x86_64/install.sh" && rm -rf /tmp/${file} /tmp/OnionHoster_${version}_linux_x86_64 && echo "✓ OnionHoster ${version} installed. Please relaunch the app."`;
+}
+
+function UpdateCommand({ command }: { command: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    const ok = await copyText(command);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
+  return (
+    <div className="mt-3 rounded-lg border border-line bg-bg p-3">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[11px] font-medium text-muted">
+          Run this command in a terminal to update:
+        </p>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => void handleCopy()}
+          aria-label="Copy update command"
+        >
+          {copied ? (
+            <Check className="size-3.5" strokeWidth={1.8} />
+          ) : (
+            <ClipboardCopy className="size-3.5" strokeWidth={1.8} />
+          )}
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      </div>
+      <pre className="mt-2 max-h-24 overflow-x-auto whitespace-pre-wrap break-all rounded border border-line bg-surface p-2 font-mono text-[10px] leading-4 text-ink">
+        {command}
+      </pre>
+    </div>
+  );
 }
 
 export function SettingsView({
@@ -326,6 +392,9 @@ export function SettingsView({
                   : "Up to date"}
             </Value>
           </SettingRow>
+          <SettingRow label="Install type">
+            <Value>{installTypeLabel(runtimeStatus?.installType)}</Value>
+          </SettingRow>
         </div>
 
         {updateAvailable ? (
@@ -336,11 +405,13 @@ export function SettingsView({
                   OnionHoster {updateAvailable.version}
                 </p>
                 <p className="mt-1 text-[11px] leading-4 text-muted">
-                  You are running {updateAvailable.currentVersion}. The update is
-                  verified with the OnionHoster signing key before installation.
+                  You are running {updateAvailable.currentVersion}.
+                  {runtimeStatus?.installType === "appimage"
+                    ? " The update is verified with the OnionHoster signing key before installation."
+                    : " Copy the command below and run it in a terminal to update."}
                 </p>
               </div>
-              {runtimeStatus?.appimage ? (
+              {runtimeStatus?.installType === "appimage" ? (
                 <Button
                   variant="primary"
                   size="sm"
@@ -361,11 +432,11 @@ export function SettingsView({
                 {updateAvailable.body}
               </p>
             ) : null}
-            {!runtimeStatus?.appimage ? (
-              <p className="mt-3 border-t border-line pt-3 text-[11px] leading-4 text-faint">
-                Download the new package for your install format from the
-                project releases.
-              </p>
+            {runtimeStatus?.installType === "deb" ? (
+              <UpdateCommand command={debUpdateCommand(updateAvailable.version)} />
+            ) : null}
+            {runtimeStatus?.installType === "tarball" ? (
+              <UpdateCommand command={tarballUpdateCommand(updateAvailable.version)} />
             ) : null}
           </div>
         ) : null}
@@ -642,17 +713,6 @@ export function SettingsView({
               </p>
             </div>
           ) : null}
-        </div>
-      </Panel>
-
-      <Panel title="Updates" description="No public release exists yet.">
-        <div className="divide-y divide-line">
-          <SettingRow label="Automatic updates">
-            <Value>After first release</Value>
-          </SettingRow>
-          <SettingRow label="Channel">
-            <Value>Stable</Value>
-          </SettingRow>
         </div>
       </Panel>
 

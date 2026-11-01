@@ -89,6 +89,11 @@ struct TorInner {
     generation: u64,
 }
 
+// NOTE: Mutex locks use .expect() throughout this module. Because the release
+// profile sets `panic = "abort"` (see Cargo.toml), a thread panic immediately
+// terminates the process — locks can never actually become poisoned. The
+// .expect() calls therefore serve only as documentation that poisoning is
+// considered unreachable.
 pub struct TorManager {
     inner: Mutex<TorInner>,
     status: Mutex<TorStatus>,
@@ -1040,8 +1045,15 @@ fn write_command(stream: &mut TcpStream, command: &str) -> Result<(), String> {
 
 fn read_response(reader: &mut BufReader<TcpStream>) -> Result<Vec<String>, String> {
     let mut lines = Vec::new();
+    const MAX_RESPONSE_LINES: usize = 10_000;
 
     loop {
+        if lines.len() >= MAX_RESPONSE_LINES {
+            return Err(
+                "Tor control response exceeded the maximum number of lines.".to_string(),
+            );
+        }
+
         let mut line = String::new();
         let read = reader
             .read_line(&mut line)

@@ -17,6 +17,8 @@ use uuid::Uuid;
 const BACKUP_VERSION: u32 = 1;
 const MIN_PASSPHRASE_LENGTH: usize = 8;
 const MAX_PASSPHRASE_LENGTH: usize = 1024;
+/// Maximum backup file size (100 MB). Prevents OOM from malicious files.
+const MAX_BACKUP_FILE_SIZE: u64 = 100 * 1024 * 1024;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -76,6 +78,15 @@ pub async fn import_backup(
     passphrase: String,
 ) -> Result<RestoreSummary, String> {
     validate_passphrase(&passphrase)?;
+    let metadata = fs::metadata(&path)
+        .map_err(|error| format!("Could not read the backup file at {path}: {error}"))?;
+    if metadata.len() > MAX_BACKUP_FILE_SIZE {
+        return Err(format!(
+            "The backup file is too large ({:.1} MB). Maximum supported size is {} MB.",
+            metadata.len() as f64 / (1024.0 * 1024.0),
+            MAX_BACKUP_FILE_SIZE / (1024 * 1024)
+        ));
+    }
     let bytes = fs::read(&path)
         .map_err(|error| format!("Could not read the backup file at {path}: {error}"))?;
     let backup = decrypt_backup(&bytes, &passphrase)?;

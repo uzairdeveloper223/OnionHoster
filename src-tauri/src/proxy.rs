@@ -162,6 +162,17 @@ pub async fn start(
     stats: Arc<ServiceStats>,
 ) -> Result<RunningServer, String> {
     let tls = tls_config(accept_invalid_certs);
+
+    if accept_invalid_certs {
+        eprintln!(
+            "OnionHoster proxy WARNING: TLS certificate validation is DISABLED for {}://{}:{}. \
+             Connections are vulnerable to man-in-the-middle attacks.",
+            scheme.as_str(),
+            host,
+            port
+        );
+    }
+
     let ws_tls = Arc::new(tls.clone());
     let connector = HttpsConnectorBuilder::new()
         .with_tls_config(tls)

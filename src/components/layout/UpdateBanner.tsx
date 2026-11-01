@@ -10,10 +10,21 @@ export function UpdateBanner() {
   const error = useUpdateStore((state) => state.error);
   const install = useUpdateStore((state) => state.install);
   const dismiss = useUpdateStore((state) => state.dismiss);
-  const appimage = useRuntimeStore((state) => state.status?.appimage ?? false);
+  const installType = useRuntimeStore(
+    (state) => state.status?.installType ?? "tarball",
+  );
 
   if (!available) {
     return null;
+  }
+
+  const isAppImage = installType === "appimage";
+
+  function subtitle(): string {
+    if (isAppImage) {
+      return `You are running ${available!.currentVersion}. Updates are signature-verified before installation.`;
+    }
+    return `You are running ${available!.currentVersion}. Copy the update command from Settings to install.`;
   }
 
   return (
@@ -24,13 +35,11 @@ export function UpdateBanner() {
           OnionHoster {available.version} is available.
         </p>
         <p className="mt-0.5 truncate text-[11px] text-muted">
-          {appimage
-            ? `You are running ${available.currentVersion}. Updates are signature-verified before installation.`
-            : `You are running ${available.currentVersion}. Download the new package from the project releases.`}
+          {subtitle()}
           {error ? ` ${error}` : ""}
         </p>
       </div>
-      {appimage ? (
+      {isAppImage ? (
         <Button
           variant="primary"
           size="sm"

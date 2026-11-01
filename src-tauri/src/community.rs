@@ -24,6 +24,11 @@ pub const FILE_QUOTA_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
 pub const LOGO_SVG: &str = include_str!("../../app-icon.svg");
 
+// NOTE: script-src still uses 'unsafe-inline' because the chat and file-sharing
+// HTML pages embed inline JavaScript via include_str!(). Migrate the inline
+// scripts to external .js files and switch to CSP nonces or hashes to fully
+// eliminate XSS risk.  The HTML sanitization in clean_body() provides a
+// defence-in-depth layer against stored XSS.
 pub const CHAT_CSP: &str = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:; media-src 'self'; connect-src 'self' ws: wss:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 pub const FILES_CSP: &str = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:; media-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
@@ -106,12 +111,14 @@ pub fn client_id_valid(value: &str) -> bool {
 }
 
 pub fn identity_for(client_id: &str) -> String {
-    let mut hash = 0xcbf29ce484222325u64;
-    for byte in client_id.as_bytes() {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
-    format!("anonymous#{:04}", 1000 + (hash % 9000))
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(b"onionhoster-identity:");
+    hasher.update(client_id.as_bytes());
+    let hash = hasher.finalize();
+    // Take the first 8 bytes and derive a 4-digit tag.
+    let value = u64::from_le_bytes(hash[..8].try_into().unwrap_or([0; 8]));
+    format!("anonymous#{:04}", 1000 + (value % 9000))
 }
 
 pub fn clean_name(value: Option<&str>) -> Option<String> {
@@ -138,7 +145,14 @@ pub fn clean_body(value: &str) -> Result<String, String> {
     if value.chars().count() > 2000 {
         return Err("Messages can be at most 2000 characters.".to_string());
     }
-    Ok(value.to_string())
+    // Escape HTML special characters to prevent stored XSS.
+    let escaped = value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;");
+    Ok(escaped)
 }
 
 pub fn safe_file_name(value: &str) -> String {

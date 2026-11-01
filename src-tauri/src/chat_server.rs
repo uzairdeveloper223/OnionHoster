@@ -12,6 +12,7 @@ use axum::{
 use futures_util::{SinkExt, StreamExt};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -24,6 +25,11 @@ use std::{
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
+/// Maximum number of messages any single client can send within the global
+/// rate-limiting window. This protects against a single client flooding the
+/// chat room even if their per-client limit has not been reached.
+const GLOBAL_RATE_LIMIT: usize = 200;
+
 const HISTORY_LIMIT: usize = 100;
 const QUERY_LIMIT_MAX: u32 = 100;
 
@@ -35,6 +41,7 @@ struct ChatContext {
     events: broadcast::Sender<String>,
     online: Arc<AtomicUsize>,
     rate: Arc<Mutex<HashMap<String, Vec<Instant>>>>,
+    global_rate: Arc<AtomicUsize>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -53,11 +60,13 @@ struct AttachmentView {
 #[serde(rename_all = "camelCase")]
 struct ChatMessage {
     id: String,
-    client_id: String,
+    client_hash: String,
     author: String,
     body: String,
     created_at: u64,
     attachment: Option<AttachmentView>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    author_token: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -84,6 +93,7 @@ struct HistoryQuery {
 struct ClientQuery {
     client: Option<String>,
     download: Option<String>,
+    token: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -138,6 +148,7 @@ fn context(data_dir: PathBuf, stats: Arc<ServiceStats>) -> Result<ChatContext, S
         events,
         online: Arc::new(AtomicUsize::new(0)),
         rate: Arc::new(Mutex::new(HashMap::new())),
+        global_rate: Arc::new(AtomicUsize::new(0)),
     })
 }
 
@@ -165,9 +176,11 @@ fn initialize(connection: &Connection) -> Result<(), String> {
             "CREATE TABLE IF NOT EXISTS messages (
                 id TEXT PRIMARY KEY,
                 client_id TEXT NOT NULL,
+                client_hash TEXT NOT NULL DEFAULT '',
                 display_name TEXT,
                 body TEXT NOT NULL,
-                created_at INTEGER NOT NULL
+                created_at INTEGER NOT NULL,
+                author_token_hash TEXT NOT NULL DEFAULT ''
             );
             CREATE TABLE IF NOT EXISTS attachments (
                 id TEXT PRIMARY KEY,
@@ -184,7 +197,13 @@ fn initialize(connection: &Connection) -> Result<(), String> {
             CREATE INDEX IF NOT EXISTS idx_chat_attachments_message
                 ON attachments(message_id);",
         )
-        .map_err(|error| format!("Could not initialize the chat database: {error}"))
+        .map_err(|error| format!("Could not initialize the chat database: {error}"))?;
+
+    // Migrate existing databases that lack the new columns.
+    let _ = connection.execute("ALTER TABLE messages ADD COLUMN client_hash TEXT NOT NULL DEFAULT ''", []);
+    let _ = connection.execute("ALTER TABLE messages ADD COLUMN author_token_hash TEXT NOT NULL DEFAULT ''", []);
+
+    Ok(())
 }
 
 async fn index(State(context): State<ChatContext>, method: Method) -> Response {
@@ -269,26 +288,47 @@ async fn post_message(
             "You are sending messages too quickly.",
         );
     }
+    if !allow_global_message(&context) {
+        return community::error_response(
+            StatusCode::TOO_MANY_REQUESTS,
+            "The chat room is rate limited. Try again shortly.",
+        );
+    }
 
     let display_name = community::clean_name(input.name.as_deref());
+    let client_hash = hash_client_id(&input.client_id);
+    let author_token = Uuid::new_v4().to_string();
+    let author_token_hash = hash_token(&author_token);
     let message = ChatMessage {
         id: Uuid::new_v4().to_string(),
-        client_id: input.client_id.clone(),
+        client_hash: client_hash.clone(),
         author: community::author_for(&input.client_id, display_name.as_deref()),
         body,
         created_at: crate::services::now_ms(),
         attachment: None,
+        author_token: Some(author_token.clone()),
     };
 
-    if let Err(error) = insert_text_message(&context, &message, display_name.as_deref()) {
+    if let Err(error) = insert_text_message(
+        &context,
+        &message,
+        display_name.as_deref(),
+        &input.client_id,
+        &client_hash,
+        &author_token_hash,
+    ) {
         return community::error_response(StatusCode::INTERNAL_SERVER_ERROR, &error);
     }
 
     context.stats.request(0);
+    let broadcast_message = ChatMessage {
+        author_token: None,
+        ..message.clone()
+    };
     broadcast(
         &context,
         &ServerEvent::Message {
-            message: Box::new(message.clone()),
+            message: Box::new(broadcast_message),
         },
     );
     community::json_response(&context.stats, StatusCode::OK, &message)
@@ -392,9 +432,12 @@ async fn post_file(State(context): State<ChatContext>, mut multipart: Multipart)
 
     let mime = community::mime_for_name(&file_name);
     let display_name = community::clean_name(name.as_deref());
+    let client_hash = hash_client_id(&client_id);
+    let author_token = Uuid::new_v4().to_string();
+    let author_token_hash = hash_token(&author_token);
     let message = ChatMessage {
         id: Uuid::new_v4().to_string(),
-        client_id: client_id.clone(),
+        client_hash: client_hash.clone(),
         author: community::author_for(&client_id, display_name.as_deref()),
         body,
         created_at: crate::services::now_ms(),
@@ -407,12 +450,16 @@ async fn post_file(State(context): State<ChatContext>, mut multipart: Multipart)
             url: format!("/api/chat/files/{attachment_id}"),
             download_url: format!("/api/chat/files/{attachment_id}?download=1"),
         }),
+        author_token: Some(author_token.clone()),
     };
 
     if let Err(error) = insert_file_message(
         &context,
         &message,
         display_name.as_deref(),
+        &client_id,
+        &client_hash,
+        &author_token_hash,
         &attachment_id,
         &file_name,
         &mime,
@@ -424,10 +471,14 @@ async fn post_file(State(context): State<ChatContext>, mut multipart: Multipart)
     }
 
     context.stats.request(size);
+    let broadcast_message = ChatMessage {
+        author_token: None,
+        ..message.clone()
+    };
     broadcast(
         &context,
         &ServerEvent::Message {
-            message: Box::new(message.clone()),
+            message: Box::new(broadcast_message),
         },
     );
     community::json_response(&context.stats, StatusCode::OK, &message)
@@ -457,12 +508,12 @@ async fn delete_message(
         };
         database
             .query_row(
-                "SELECT m.client_id, a.storage_name
+                "SELECT m.client_id, m.client_hash, a.storage_name
                  FROM messages m
                  LEFT JOIN attachments a ON a.message_id = m.id
                  WHERE m.id = ?1",
                 params![id],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?)),
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, Option<String>>(2)?)),
             )
             .optional()
     };
@@ -476,10 +527,13 @@ async fn delete_message(
             );
         }
     };
-    let Some((owner, storage_name)) = row else {
+    let Some((owner_raw, owner_hash, storage_name)) = row else {
         return community::error_response(StatusCode::NOT_FOUND, "The message was not found.");
     };
-    if owner != client_id {
+    // Compare against both the raw client_id (legacy rows) and the hashed
+    // version so that ownership checks work for old and new messages.
+    let caller_hash = hash_client_id(&client_id);
+    if owner_raw != client_id && owner_hash != caller_hash {
         return community::error_response(
             StatusCode::FORBIDDEN,
             "Only the author can delete this message.",
@@ -644,13 +698,13 @@ async fn socket_loop(socket: WebSocket, context: ChatContext) {
 }
 
 fn finish_socket(context: &ChatContext) {
-    let online = context
+    let online = match context
         .online
-        .try_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
-            Some(value.saturating_sub(1))
-        })
-        .map(|value| value.saturating_sub(1))
-        .unwrap_or(0);
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |value| value.checked_sub(1))
+    {
+        Ok(value) => value,
+        Err(current) => current.saturating_sub(1),
+    };
     let _ = context
         .events
         .send(event_json(&ServerEvent::Presence { online }));
@@ -685,6 +739,32 @@ fn allow_message(context: &ChatContext, client_id: &str, limit: usize) -> bool {
     true
 }
 
+/// Global rate limiter that caps total messages across all clients within a
+/// rolling window. Prevents the room as a whole from being flooded.
+fn allow_global_message(context: &ChatContext) -> bool {
+    let current = context.global_rate.load(Ordering::Relaxed);
+    if current >= GLOBAL_RATE_LIMIT {
+        return false;
+    }
+    context.global_rate.fetch_add(1, Ordering::Relaxed);
+    true
+}
+
+/// Hash a raw `client_id` into a hex digest for storage so the original value
+/// is never persisted or broadcast.  Uses SHA-256.
+fn hash_client_id(client_id: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(client_id.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+/// Hash an author token for storage so the raw token is never persisted.
+fn hash_token(token: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(token.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
 fn load_messages(
     context: &ChatContext,
     before: u64,
@@ -697,7 +777,7 @@ fn load_messages(
         .map_err(|_| "The chat database is unavailable.".to_string())?;
     let mut statement = database
         .prepare(
-            "SELECT m.id, m.client_id, m.display_name, m.body, m.created_at,
+            "SELECT m.id, m.client_id, m.client_hash, m.display_name, m.body, m.created_at,
                     a.id, a.file_name, a.mime, a.size
              FROM messages m
              LEFT JOIN attachments a ON a.message_id = m.id
@@ -721,15 +801,16 @@ fn load_messages(
 
 fn message_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ChatMessage> {
     let client_id: String = row.get(1)?;
-    let display_name: Option<String> = row.get(2)?;
-    let attachment_id: Option<String> = row.get(5)?;
+    let client_hash: String = row.get(2)?;
+    let display_name: Option<String> = row.get(3)?;
+    let attachment_id: Option<String> = row.get(6)?;
     let attachment = if let Some(id) = attachment_id {
-        let mime: String = row.get(7)?;
+        let mime: String = row.get(8)?;
         Some(AttachmentView {
             id: id.clone(),
-            file_name: row.get(6)?,
+            file_name: row.get(7)?,
             mime: mime.clone(),
-            size: row.get::<_, i64>(8)? as u64,
+            size: row.get::<_, i64>(9)? as u64,
             kind: community::media_kind(&mime).to_string(),
             url: format!("/api/chat/files/{id}"),
             download_url: format!("/api/chat/files/{id}?download=1"),
@@ -741,10 +822,11 @@ fn message_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ChatMessage> {
     Ok(ChatMessage {
         id: row.get(0)?,
         author: community::author_for(&client_id, display_name.as_deref()),
-        client_id,
-        body: row.get(3)?,
-        created_at: row.get::<_, i64>(4)? as u64,
+        client_hash,
+        body: row.get(4)?,
+        created_at: row.get::<_, i64>(5)? as u64,
         attachment,
+        author_token: None,
     })
 }
 
@@ -752,6 +834,9 @@ fn insert_text_message(
     context: &ChatContext,
     message: &ChatMessage,
     display_name: Option<&str>,
+    client_id: &str,
+    client_hash: &str,
+    author_token_hash: &str,
 ) -> Result<(), String> {
     let database = context
         .db
@@ -759,14 +844,16 @@ fn insert_text_message(
         .map_err(|_| "The chat database is unavailable.".to_string())?;
     database
         .execute(
-            "INSERT INTO messages (id, client_id, display_name, body, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO messages (id, client_id, client_hash, display_name, body, created_at, author_token_hash)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 message.id,
-                message.client_id,
+                client_id,
+                client_hash,
                 display_name,
                 message.body,
-                message.created_at as i64
+                message.created_at as i64,
+                author_token_hash,
             ],
         )
         .map_err(|error| format!("Could not save the message: {error}"))?;
@@ -778,6 +865,9 @@ fn insert_file_message(
     context: &ChatContext,
     message: &ChatMessage,
     display_name: Option<&str>,
+    client_id: &str,
+    client_hash: &str,
+    author_token_hash: &str,
     attachment_id: &str,
     file_name: &str,
     mime: &str,
@@ -804,14 +894,16 @@ fn insert_file_message(
 
     transaction
         .execute(
-            "INSERT INTO messages (id, client_id, display_name, body, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO messages (id, client_id, client_hash, display_name, body, created_at, author_token_hash)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 message.id,
-                message.client_id,
+                client_id,
+                client_hash,
                 display_name,
                 message.body,
-                message.created_at as i64
+                message.created_at as i64,
+                author_token_hash,
             ],
         )
         .map_err(|error| format!("Could not save the message: {error}"))?;
@@ -1066,7 +1158,8 @@ mod tests {
         initialize(&connection).expect("initialize database");
         connection
             .execute(
-                "INSERT INTO messages VALUES ('m1', 'client-1234', 'Zed', 'hello', 10)",
+                "INSERT INTO messages (id, client_id, client_hash, display_name, body, created_at, author_token_hash)
+                 VALUES ('m1', 'client-1234', 'hashed', 'Zed', 'hello', 10, '')",
                 [],
             )
             .expect("insert message");
@@ -1080,7 +1173,7 @@ mod tests {
 
         let mut statement = connection
             .prepare(
-                "SELECT m.id, m.client_id, m.display_name, m.body, m.created_at,
+                "SELECT m.id, m.client_id, m.client_hash, m.display_name, m.body, m.created_at,
                         a.id, a.file_name, a.mime, a.size
                  FROM messages m LEFT JOIN attachments a ON a.message_id = m.id",
             )

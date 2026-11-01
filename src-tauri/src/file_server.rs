@@ -8,6 +8,7 @@ use axum::{
 };
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -106,6 +107,7 @@ fn initialize(connection: &Connection) -> Result<(), String> {
             "CREATE TABLE IF NOT EXISTS files (
                 id TEXT PRIMARY KEY,
                 client_id TEXT NOT NULL,
+                client_hash TEXT NOT NULL DEFAULT '',
                 file_name TEXT NOT NULL,
                 mime TEXT NOT NULL,
                 size INTEGER NOT NULL,
@@ -115,7 +117,12 @@ fn initialize(connection: &Connection) -> Result<(), String> {
             CREATE INDEX IF NOT EXISTS idx_files_created
                 ON files(created_at DESC, id DESC);",
         )
-        .map_err(|error| format!("Could not initialize the file-sharing database: {error}"))
+        .map_err(|error| format!("Could not initialize the file-sharing database: {error}"))?;
+
+    // Migrate existing databases that lack the new column.
+    let _ = connection.execute("ALTER TABLE files ADD COLUMN client_hash TEXT NOT NULL DEFAULT ''", []);
+
+    Ok(())
 }
 
 async fn index(State(context): State<FileContext>, method: Method) -> Response {
@@ -141,6 +148,7 @@ async fn list(State(context): State<FileContext>, Query(query): Query<ListQuery>
     let client = query
         .client
         .filter(|value| community::client_id_valid(value));
+    let client_hash = client.as_deref().map(hash_client_id);
     let database = match context.db.lock() {
         Ok(database) => database,
         Err(_) => {
@@ -152,7 +160,7 @@ async fn list(State(context): State<FileContext>, Query(query): Query<ListQuery>
     };
 
     let mut statement = match database.prepare(
-        "SELECT id, client_id, file_name, mime, size, created_at
+        "SELECT id, client_id, client_hash, file_name, mime, size, created_at
          FROM files ORDER BY created_at DESC, id DESC LIMIT ?1",
     ) {
         Ok(statement) => statement,
@@ -170,8 +178,9 @@ async fn list(State(context): State<FileContext>, Query(query): Query<ListQuery>
             row.get::<_, String>(1)?,
             row.get::<_, String>(2)?,
             row.get::<_, String>(3)?,
-            row.get::<_, i64>(4)? as u64,
+            row.get::<_, String>(4)?,
             row.get::<_, i64>(5)? as u64,
+            row.get::<_, i64>(6)? as u64,
         ))
     }) {
         Ok(rows) => rows,
@@ -185,7 +194,7 @@ async fn list(State(context): State<FileContext>, Query(query): Query<ListQuery>
 
     let mut files = Vec::new();
     for row in rows {
-        let (id, owner, file_name, mime, size, created_at) = match row {
+        let (id, owner_raw, owner_hash, file_name, mime, size, created_at) = match row {
             Ok(row) => row,
             Err(error) => {
                 return community::error_response(
@@ -194,7 +203,11 @@ async fn list(State(context): State<FileContext>, Query(query): Query<ListQuery>
                 );
             }
         };
-        let owned = client.as_deref() == Some(owner.as_str());
+        // Check ownership against both raw client_id (legacy) and hashed version.
+        let owned = match (&client, &client_hash) {
+            (Some(raw), Some(hashed)) => owner_raw == *raw || owner_hash == *hashed,
+            _ => false,
+        };
         files.push(file_view(&id, &file_name, &mime, size, created_at, owned));
     }
 
@@ -347,9 +360,9 @@ async fn remove(
         };
         database
             .query_row(
-                "SELECT client_id, storage_name FROM files WHERE id = ?1",
+                "SELECT client_id, client_hash, storage_name FROM files WHERE id = ?1",
                 params![id],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?)),
             )
             .optional()
     };
@@ -363,10 +376,13 @@ async fn remove(
             );
         }
     };
-    let Some((owner, storage_name)) = row else {
+    let Some((owner_raw, owner_hash, storage_name)) = row else {
         return community::error_response(StatusCode::NOT_FOUND, "The file was not found.");
     };
-    if owner != client_id {
+    // Compare against both the raw client_id (legacy rows) and the hashed
+    // version so that ownership checks work for old and new files.
+    let caller_hash = hash_client_id(&client_id);
+    if owner_raw != client_id && owner_hash != caller_hash {
         return community::error_response(
             StatusCode::FORBIDDEN,
             "Only the uploader can delete this file.",
@@ -510,11 +526,12 @@ fn insert_file(
     transaction
         .execute(
             "INSERT INTO files
-                (id, client_id, file_name, mime, size, storage_name, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                (id, client_id, client_hash, file_name, mime, size, storage_name, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 id,
                 client_id,
+                hash_client_id(client_id),
                 file_name,
                 mime,
                 size as i64,
@@ -548,6 +565,14 @@ fn allow_upload(context: &FileContext, client_id: &str) -> bool {
     }
     timestamps.push(now);
     true
+}
+
+/// Hash a raw `client_id` into a hex digest for storage so the original value
+/// is never persisted or broadcast.  Uses SHA-256.
+fn hash_client_id(client_id: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(client_id.as_bytes());
+    format!("{:x}", hasher.finalize())
 }
 
 #[cfg(test)]

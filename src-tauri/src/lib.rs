@@ -105,7 +105,10 @@ pub fn run() {
             backup::import_backup,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building OnionHoster")
+        .unwrap_or_else(|error| {
+            eprintln!("OnionHoster failed to start: {error}");
+            std::process::exit(1);
+        })
         .run(move |app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
                 app.state::<Arc<TunnelManager>>().shutdown_all();

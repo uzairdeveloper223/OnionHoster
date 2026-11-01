@@ -231,11 +231,22 @@ async fn serve_file(
 
     let mut builder = Response::builder()
         .status(status)
-        .header(header::CONTENT_TYPE, content_type)
+        .header(header::CONTENT_TYPE, content_type.clone())
         .header(header::CONTENT_LENGTH, content_length.to_string())
         .header(header::ACCEPT_RANGES, "bytes")
         .header("x-content-type-options", "nosniff")
+        .header("referrer-policy", "no-referrer")
+        .header("x-frame-options", "DENY")
         .header(header::CACHE_CONTROL, "no-cache");
+
+    // Apply a restrictive CSP to HTML pages served from the static server
+    // to reduce XSS risk for user-hosted content.
+    if content_type.starts_with("text/html") {
+        builder = builder.header(
+            "content-security-policy",
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+        );
+    }
 
     if status == StatusCode::PARTIAL_CONTENT {
         builder = builder.header(
@@ -324,6 +335,12 @@ async fn directory_listing(context: &StaticContext, path: &Path) -> Response {
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
         .header("x-content-type-options", "nosniff")
+        .header("referrer-policy", "no-referrer")
+        .header("x-frame-options", "DENY")
+        .header(
+            "content-security-policy",
+            "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        )
         .body(Body::from(html))
         .unwrap_or_else(|_| {
             simple_response(

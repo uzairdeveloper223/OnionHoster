@@ -14,16 +14,57 @@ pub struct RuntimeComponent {
     pub path: Option<String>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InstallType {
+    Appimage,
+    Deb,
+    Tarball,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeStatus {
     pub appimage: bool,
+    pub install_type: InstallType,
     pub ready: bool,
     pub components: Vec<RuntimeComponent>,
 }
 
 pub fn appimage_active() -> bool {
-    std::env::var_os("APPIMAGE").is_some()
+    // Primary: the AppImage runtime always sets this env var.
+    if std::env::var_os("APPIMAGE").is_some() {
+        return true;
+    }
+    // Fallback: check if the real binary path looks like an AppImage.
+    // AppImage mounts the squashfs to /tmp/.mount_<name>XXXXXX and the
+    // APPIMAGE env var points to the .AppImage file on disk.  We can also
+    // check whether /proc/self/exe resolves to a path ending in .AppImage
+    // or is inside a typical AppImage mount directory.
+    if let Ok(exe) = std::env::current_exe() {
+        let path_str = exe.to_string_lossy();
+        if path_str.contains(".AppImage")
+            || path_str.contains("/tmp/.mount_")
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Detect how OnionHoster was installed.
+pub fn detect_install_type() -> InstallType {
+    if appimage_active() {
+        return InstallType::Appimage;
+    }
+    // Deb packages install the binary at /usr/bin/onionhoster.
+    if let Ok(exe) = std::env::current_exe() {
+        if exe.starts_with("/usr") {
+            return InstallType::Deb;
+        }
+    }
+    // Everything else (portable tarball, running from build dir, etc.)
+    InstallType::Tarball
 }
 
 fn runtime_root(app: &AppHandle) -> Result<PathBuf, String> {
@@ -269,6 +310,7 @@ fn status_for(app: &AppHandle) -> RuntimeStatus {
 
     RuntimeStatus {
         appimage: appimage_active(),
+        install_type: detect_install_type(),
         ready,
         components,
     }

@@ -7,8 +7,11 @@ export interface RuntimeComponent {
   path: string | null;
 }
 
+export type InstallType = "appimage" | "deb" | "tarball";
+
 export interface RuntimeStatus {
   appimage: boolean;
+  installType: InstallType;
   ready: boolean;
   components: RuntimeComponent[];
 }
