@@ -2,7 +2,7 @@
 
 Host local websites and TCP services on Tor from a desktop application.
 
-Status: 1.0.0 for Linux x86_64.
+Status: 1.0.1 for Linux x86_64.
 
 ## Features
 
@@ -15,8 +15,8 @@ Status: 1.0.0 for Linux x86_64.
 - Public file sharing with uploads, downloads, video playback, and quotas.
 - Encrypted `.onionhoster` backup and restore for onion addresses and service
   settings only.
-- AppImage in-place updates with signature verification, plus manual `.deb` and
-  portable tarball upgrades.
+- Smart update system with in-place signed AppImage updates, plus one-click copyable
+  terminal update commands for `.deb` and portable tarball installations.
 
 ## Install
 
@@ -50,7 +50,7 @@ sudo pacman -S webkit2gtk-4.1 gtk3 librsvg ca-certificates xdg-utils
 Install the `.deb` with your package manager so dependencies are resolved:
 
 ```bash
-sudo apt install ./OnionHoster_1.0.0_amd64.deb
+sudo apt install ./onionhoster_1.0.1_amd64.deb
 ```
 
 AppImage builds are portable: make the file executable and run it. If FUSE 2 is
@@ -60,8 +60,8 @@ AppImage. It is not statically linked and uses the same system WebKitGTK/GTK
 dependencies listed above.
 
 ```bash
-tar -xzf OnionHoster_1.0.0_linux_x86_64.tar.gz
-cd OnionHoster_1.0.0_linux_x86_64
+tar -xzf OnionHoster_1.0.1_linux_x86_64.tar.gz
+cd OnionHoster_1.0.1_linux_x86_64
 ./bin/onionhoster
 ```
 

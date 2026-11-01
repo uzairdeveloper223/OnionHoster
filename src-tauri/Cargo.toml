@@ -45,6 +45,20 @@ tauri-plugin-process = "2.4.0"
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
 
+[profile.dev]
+debug = 1
+
+[profile.dev.package."*"]
+opt-level = 1
+debug = 0
+
+[profile.test]
+debug = 1
+
+[profile.test.package."*"]
+opt-level = 1
+debug = 0
+
 [profile.release]
 codegen-units = 1
 lto = true
