@@ -74,13 +74,13 @@ export function TunnelCard({
   }
 
   return (
-    <article className="flex flex-col rounded-xl border border-line bg-surface p-4">
+    <article className="flex min-w-0 flex-col rounded-xl border border-line bg-surface p-4">
       <header className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
           <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-line bg-bg">
             <ProviderIcon provider={tunnel.provider} />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h3 className="truncate text-[13px] font-medium text-ink">{tunnel.name}</h3>
             <p className="mt-0.5 truncate font-mono text-[10px] text-faint">
               {tunnelProviderLabel(tunnel.provider)}
@@ -148,7 +148,7 @@ export function TunnelCard({
       )}
 
       {tunnel.error ? (
-        <p className="mt-3 rounded-lg border border-line bg-bg px-2.5 py-2 text-[11px] leading-4 text-muted">
+        <p className="mt-3 wrap-anywhere rounded-lg border border-line bg-bg px-2.5 py-2 text-[11px] leading-4 text-muted">
           {tunnel.error}
         </p>
       ) : null}

@@ -24,7 +24,8 @@ import { OnionMark } from "@/components/brand/OnionMark";
 import { Button } from "@/components/ui/Button";
 import { formatBytes, serviceAddress, type ServiceSource, type ServiceView } from "@/lib/services";
 import { copyText } from "@/lib/clipboard";
-import { isTauri } from "@/lib/app";
+import { isAndroid, isTauri } from "@/lib/app";
+import { discardAndroidSource, pickAndroidSource, saveClientKey } from "@/lib/files";
 import { detectLocalPorts, type DetectedPort } from "@/lib/ports";
 import { useServiceStore } from "@/stores/services";
 import { useTorStore } from "@/stores/tor";
@@ -139,6 +140,7 @@ export function CreateServiceDialog({
   const [detecting, setDetecting] = useState(false);
   const [detectError, setDetectError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const createService = useServiceStore((state) => state.create);
   const startService = useServiceStore((state) => state.start);
@@ -190,7 +192,7 @@ export function CreateServiceDialog({
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen || !isTauri || kind !== "static" || step !== "details") {
+    if (!isOpen || !isTauri || isAndroid || kind !== "static" || step !== "details") {
       return;
     }
 
@@ -231,19 +233,31 @@ export function CreateServiceDialog({
   }, [isOpen, kind, step]);
 
   useEffect(() => {
+    if (!isAndroid || !root) {
+      return;
+    }
+    const discard = () => { void discardAndroidSource(root).catch(console.error); };
+    if (!isOpen) {
+      discard();
+      return;
+    }
+    return discard;
+  }, [isOpen, root]);
+
+  useEffect(() => {
     if (!isOpen) {
       return;
     }
 
     const handler = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !submitting) {
+      if (event.key === "Escape" && !submitting && !importing) {
         onClose();
       }
     };
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [isOpen, onClose, submitting]);
+  }, [isOpen, onClose, submitting, importing]);
 
   if (!isOpen) {
     return null;
@@ -374,13 +388,26 @@ export function CreateServiceDialog({
     if (!isTauri) {
       return;
     }
-    const selected = await open({
-      directory: true,
-      multiple: false,
-      title: "Choose a folder to host",
-    });
-    if (typeof selected === "string") {
-      setRoot(selected);
+    setImporting(true);
+    setError(null);
+    try {
+      if (isAndroid) {
+        const path = await pickAndroidSource(true);
+        if (path) setRoot(path);
+      } else {
+        const selected = await open({
+          directory: true,
+          multiple: false,
+          title: "Choose a folder to host",
+        });
+        if (typeof selected === "string") {
+          setRoot(selected);
+        }
+      }
+    } catch (error) {
+      setError(String(error));
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -388,13 +415,26 @@ export function CreateServiceDialog({
     if (!isTauri) {
       return;
     }
-    const selected = await open({
-      multiple: false,
-      title: "Choose an HTML file to host",
-      filters: [{ name: "HTML", extensions: ["html", "htm"] }],
-    });
-    if (typeof selected === "string") {
-      setRoot(selected);
+    setImporting(true);
+    setError(null);
+    try {
+      if (isAndroid) {
+        const path = await pickAndroidSource(false);
+        if (path) setRoot(path);
+      } else {
+        const selected = await open({
+          multiple: false,
+          title: "Choose an HTML file to host",
+          filters: [{ name: "HTML", extensions: ["html", "htm"] }],
+        });
+        if (typeof selected === "string") {
+          setRoot(selected);
+        }
+      }
+    } catch (error) {
+      setError(String(error));
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -434,8 +474,16 @@ export function CreateServiceDialog({
     }
   }
 
-  function downloadClientAuth() {
+  async function downloadClientAuth() {
     if (!clientAuthLine || !service?.onion.serviceId) {
+      return;
+    }
+    if (isAndroid) {
+      try {
+        await saveClientKey(`${service.onion.serviceId}.auth_private`, `${clientAuthLine}\n`);
+      } catch (error) {
+        setError(String(error));
+      }
       return;
     }
     const blob = new Blob([`${clientAuthLine}\n`], { type: "text/plain" });
@@ -485,7 +533,7 @@ export function CreateServiceDialog({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-[2px]"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !submitting) {
+        if (event.target === event.currentTarget && !submitting && !importing) {
           onClose();
         }
       }}
@@ -494,7 +542,7 @@ export function CreateServiceDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-service-title"
-        className="panel flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl shadow-2xl"
+        className="panel flex max-h-[90dvh] w-full max-w-xl flex-col overflow-hidden rounded-2xl shadow-2xl"
       >
         <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
           <div>
@@ -516,7 +564,7 @@ export function CreateServiceDialog({
           <Button
             size="icon"
             variant="ghost"
-            disabled={submitting && !created}
+            disabled={(submitting && !created) || importing}
             onClick={onClose}
             aria-label="Close"
           >
@@ -638,7 +686,8 @@ export function CreateServiceDialog({
                       <input
                         value={root}
                         onChange={(event) => setRoot(event.target.value)}
-                        placeholder="/home/you/site"
+                        placeholder={isAndroid ? "Choose a folder or HTML file" : "/home/you/site"}
+                        readOnly={isAndroid}
                         className={cn(inputClass, "font-mono text-[12px]")}
                       />
                       {isTauri ? (
@@ -648,6 +697,7 @@ export function CreateServiceDialog({
                             variant="secondary"
                             className="h-9"
                             onClick={() => void browseFolder()}
+                            disabled={importing}
                             aria-label="Choose folder"
                             title="Choose folder"
                           >
@@ -658,6 +708,7 @@ export function CreateServiceDialog({
                             variant="secondary"
                             className="h-9"
                             onClick={() => void browseFile()}
+                            disabled={importing}
                             aria-label="Choose HTML file"
                             title="Choose HTML file"
                           >
@@ -673,7 +724,9 @@ export function CreateServiceDialog({
                       dragActive ? "text-ink" : "text-faint",
                     )}
                   >
-                    {dragActive
+                    {importing ? "Importing the site into app storage." : isAndroid
+                      ? "The selected site is copied into app storage. Choose it again to import changes."
+                      : dragActive
                       ? "Drop the folder or HTML file to use it."
                       : "You can also drop a folder or HTML file onto the window."}
                   </p>
@@ -696,7 +749,7 @@ export function CreateServiceDialog({
 
               {kind === "proxy" ? (
                 <>
-                  <div className="grid grid-cols-[5.5rem_1fr_6rem] gap-2">
+                  <div className="grid grid-cols-[5.5rem_minmax(0,1fr)_4rem] gap-2 sm:grid-cols-[5.5rem_1fr_6rem]">
                     <Field label="Scheme">
                       <div className="flex h-9 rounded-md border border-line bg-bg p-0.5">
                         {(["http", "https"] as const).map((value) => (
@@ -1073,7 +1126,7 @@ export function CreateServiceDialog({
                       size="sm"
                       variant="ghost"
                       disabled={!clientAuthLine}
-                      onClick={downloadClientAuth}
+                      onClick={() => void downloadClientAuth()}
                     >
                       <Download className="size-3.5" strokeWidth={1.6} />
                       .auth_private
@@ -1145,11 +1198,11 @@ export function CreateServiceDialog({
             </>
           ) : step === "details" ? (
             <>
-              <Button variant="ghost" onClick={() => setStep("type")}>
+              <Button variant="ghost" disabled={importing} onClick={() => setStep("type")}>
                 <ArrowLeft className="size-3.5" strokeWidth={1.8} />
                 Back
               </Button>
-              <Button disabled={submitting} onClick={() => void publish()}>
+               <Button disabled={submitting || importing} onClick={() => void publish()}>
                 {submitting ? (
                   <Loader2 className="size-3.5 animate-spin" strokeWidth={1.8} />
                 ) : null}

@@ -20,6 +20,7 @@ pub enum InstallType {
     Appimage,
     Deb,
     Tarball,
+    Android,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -52,6 +53,9 @@ pub fn appimage_active() -> bool {
 
 /// Detect how OnionHoster was installed.
 pub fn detect_install_type() -> InstallType {
+    if cfg!(target_os = "android") {
+        return InstallType::Android;
+    }
     if appimage_active() {
         return InstallType::Appimage;
     }
@@ -70,6 +74,7 @@ fn runtime_root(app: &AppHandle) -> Result<PathBuf, String> {
         .map_err(|error| format!("Could not resolve the runtime directory: {error}"))
 }
 
+#[cfg(not(target_os = "android"))]
 fn resource_dirs(app: &AppHandle, name: &str) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     if let Ok(resource_dir) = app.path().resource_dir() {
@@ -84,10 +89,12 @@ fn resource_dirs(app: &AppHandle, name: &str) -> Vec<PathBuf> {
     dirs
 }
 
+#[cfg(not(target_os = "android"))]
 fn valid_tor_dir(dir: &Path) -> bool {
     dir.join("tor").is_file() && dir.join("lyrebird").is_file()
 }
 
+#[cfg(not(target_os = "android"))]
 fn tor_source(app: &AppHandle) -> Option<PathBuf> {
     if let Some(path) = std::env::var_os("ONIONHOSTER_TOR_DIR") {
         let dir = PathBuf::from(path);
@@ -100,6 +107,7 @@ fn tor_source(app: &AppHandle) -> Option<PathBuf> {
         .find(|dir| valid_tor_dir(dir))
 }
 
+#[cfg(not(target_os = "android"))]
 fn cloudflared_source(app: &AppHandle) -> Option<PathBuf> {
     if let Some(path) = std::env::var_os("ONIONHOSTER_CLOUDFLARED") {
         let path = PathBuf::from(path);
@@ -129,6 +137,7 @@ fn read_version(dir: &Path, prefix: Option<&str>) -> Option<String> {
     })
 }
 
+#[cfg(not(target_os = "android"))]
 fn safe_version(value: &str) -> String {
     let value: String = value
         .chars()
@@ -143,6 +152,7 @@ fn safe_version(value: &str) -> String {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 fn find_copied_tor(app: &AppHandle) -> Option<PathBuf> {
     let root = runtime_root(app).ok()?.join("tor");
     let entries = fs::read_dir(root).ok()?;
@@ -153,6 +163,7 @@ fn find_copied_tor(app: &AppHandle) -> Option<PathBuf> {
         .max()
 }
 
+#[cfg(not(target_os = "android"))]
 fn copy_dir(source: &Path, target: &Path) -> Result<(), String> {
     fs::create_dir_all(target).map_err(|error| {
         format!(
@@ -183,6 +194,7 @@ fn copy_dir(source: &Path, target: &Path) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(not(target_os = "android"))]
 fn copy_dir_atomic(source: &Path, target: &Path) -> Result<(), String> {
     if valid_tor_dir(target) {
         return Ok(());
@@ -207,6 +219,19 @@ fn copy_dir_atomic(source: &Path, target: &Path) -> Result<(), String> {
     })
 }
 
+#[cfg(target_os = "android")]
+pub fn ensure_tor_runtime(app: &AppHandle) -> Result<PathBuf, String> {
+    let paths = crate::mobile::runtime_paths(app)?;
+    if paths.native_dir.join("libTor.so").is_file()
+        && paths.native_dir.join("liblyrebird.so").is_file()
+    {
+        Ok(paths.native_dir)
+    } else {
+        Err("The bundled Android Tor runtime was not found. Reinstall OnionHoster.".to_string())
+    }
+}
+
+#[cfg(not(target_os = "android"))]
 pub fn ensure_tor_runtime(app: &AppHandle) -> Result<PathBuf, String> {
     if let Some(source) = tor_source(app) {
         if appimage_active() {
@@ -228,6 +253,22 @@ pub fn ensure_tor_runtime(app: &AppHandle) -> Result<PathBuf, String> {
         .to_string())
 }
 
+#[cfg(target_os = "android")]
+pub fn ensure_cloudflared(app: &AppHandle) -> Result<PathBuf, String> {
+    let path = crate::mobile::runtime_paths(app)?
+        .native_dir
+        .join("libcloudflared.so");
+    if path.is_file() {
+        Ok(path)
+    } else {
+        Err(
+            "The bundled Android cloudflared runtime was not found. Reinstall OnionHoster."
+                .to_string(),
+        )
+    }
+}
+
+#[cfg(not(target_os = "android"))]
 pub fn ensure_cloudflared(app: &AppHandle) -> Result<PathBuf, String> {
     if let Some(source) = cloudflared_source(app) {
         if appimage_active() {
@@ -289,10 +330,21 @@ fn component(
 fn status_for(app: &AppHandle) -> RuntimeStatus {
     let tor = ensure_tor_runtime(app);
     let cloudflared = ensure_cloudflared(app);
+    #[cfg(target_os = "android")]
+    let (tor_version, cloudflared_version) = crate::mobile::runtime_paths(app)
+        .map(|paths| {
+            (
+                read_version(&paths.data_dir.join("tor"), Some("tor")),
+                read_version(&paths.data_dir.join("cloudflared"), Some("cloudflared")),
+            )
+        })
+        .unwrap_or_default();
+    #[cfg(not(target_os = "android"))]
     let tor_version = tor
         .as_ref()
         .ok()
         .and_then(|path| read_version(path, Some("tor")));
+    #[cfg(not(target_os = "android"))]
     let cloudflared_version = cloudflared
         .as_ref()
         .ok()
@@ -313,11 +365,64 @@ fn status_for(app: &AppHandle) -> RuntimeStatus {
 }
 
 #[tauri::command]
+pub async fn pick_android_source(
+    app: AppHandle,
+    directory: bool,
+) -> Result<Option<String>, String> {
+    #[cfg(target_os = "android")]
+    return crate::mobile::pick_source(&app, directory);
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, directory);
+        Err("The Android file picker is only available on Android.".to_string())
+    }
+}
+
+#[tauri::command(async)]
+pub fn discard_android_source(app: AppHandle, path: String) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    return crate::mobile::discard_source(&app, &path);
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, path);
+        Ok(())
+    }
+}
+
+#[tauri::command]
+pub async fn get_android_update(app: AppHandle) -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "android")]
+    return crate::mobile::check_update(&app);
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        Ok(serde_json::Value::Null)
+    }
+}
+
+#[tauri::command]
+pub async fn open_android_release(app: AppHandle, url: String) -> Result<(), String> {
+    if !url.starts_with("https://github.com/uzairdeveloper223/OnionHoster/releases/download/v")
+        || !url.ends_with("_android_arm64.apk")
+        || url.contains(['?', '#'])
+    {
+        return Err("The Android release URL is invalid.".to_string());
+    }
+    #[cfg(target_os = "android")]
+    return crate::mobile::open_release(&app, url);
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        Err("APK updates are only available on Android.".to_string())
+    }
+}
+
+#[tauri::command(async)]
 pub fn get_runtime_status(app: AppHandle) -> RuntimeStatus {
     status_for(&app)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn repair_runtime(app: AppHandle) -> Result<RuntimeStatus, String> {
     if appimage_active() {
         let root = runtime_root(&app)?;

@@ -60,6 +60,9 @@ jobs:
       - name: Build frontend
         run: pnpm build
 
+      - name: Verify versions
+        run: bash scripts/verify-version.sh
+
       - name: Check formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       
@@ -73,3 +76,78 @@ jobs:
 
       - name: Run clippy
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+  android:
+    name: Android build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android toolchain
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.3"
+          cache: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+          components: clippy
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: android
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch Android runtime
+        run: pnpm fetch:android
+
+      - name: Build Android APK
+        run: pnpm tauri android build --target aarch64 --apk --debug --ci
+
+      - name: Run Android clippy
+        env:
+          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
+          CC_aarch64_linux_android: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
+          CXX_aarch64_linux_android: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++
+          AR_aarch64_linux_android: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --target aarch64-linux-android --lib -- -D warnings
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: onionhoster-android-debug
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*-debug.apk
+          if-no-files-found: error

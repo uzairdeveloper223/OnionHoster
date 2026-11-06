@@ -1,6 +1,7 @@
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
-import { isTauri } from "@/lib/app";
+import { invoke } from "@tauri-apps/api/core";
+import { APP_VERSION, isAndroid, isTauri } from "@/lib/app";
 
 export interface UpdateInfo {
   currentVersion: string;
@@ -16,6 +17,7 @@ export interface UpdateProgress {
 }
 
 let pendingUpdate: Update | null = null;
+let pendingAndroidUrl: string | null = null;
 
 export async function checkForUpdate(): Promise<UpdateInfo | null> {
   if (!isTauri) {
@@ -23,6 +25,34 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
   }
 
   await closePendingUpdate();
+  if (isAndroid) {
+    const manifest = await invoke<{
+      version?: string;
+      url?: string;
+      date?: string;
+      body?: string;
+    }>("get_android_update");
+    if (!manifest.version) {
+      return null;
+    }
+    if (!/^\d+\.\d+\.\d+$/.test(manifest.version) ||
+        manifest.url !== `https://github.com/uzairdeveloper223/OnionHoster/releases/download/v${manifest.version}/OnionHoster_${manifest.version}_android_arm64.apk`) {
+      throw new Error("The Android update manifest is invalid.");
+    }
+    const current = APP_VERSION.split(".").map(Number);
+    const next = manifest.version.split(".").map(Number);
+    const different = next.findIndex((part, index) => part !== current[index]);
+    if (different < 0 || next[different] < current[different]) {
+      return null;
+    }
+    pendingAndroidUrl = manifest.url;
+    return {
+      currentVersion: APP_VERSION,
+      version: manifest.version,
+      date: manifest.date ?? null,
+      body: manifest.body ?? null,
+    };
+  }
   const update = await check({ timeout: 20_000 });
   if (!update) {
     return null;
@@ -40,6 +70,10 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
 export async function installPendingUpdate(
   onProgress: (progress: UpdateProgress) => void,
 ) {
+  if (isAndroid && pendingAndroidUrl) {
+    await invoke("open_android_release", { url: pendingAndroidUrl });
+    return;
+  }
   if (!pendingUpdate) {
     throw new Error("Check for an update before installing it.");
   }
@@ -68,6 +102,7 @@ export async function installPendingUpdate(
 }
 
 export async function closePendingUpdate() {
+  pendingAndroidUrl = null;
   if (!pendingUpdate) {
     return;
   }

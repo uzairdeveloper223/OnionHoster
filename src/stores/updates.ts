@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { isTauri } from "@/lib/app";
+import { isAndroid, isTauri } from "@/lib/app";
 import {
   checkForUpdate,
   closePendingUpdate,
@@ -70,6 +70,9 @@ export const useUpdateStore = create<UpdateStore>((set, get) => ({
       await installPendingUpdate((update) => {
         set({ progress: update.percent });
       });
+      if (isAndroid) {
+        set({ installing: false, progress: null });
+      }
     } catch (error) {
       set({ installing: false, progress: null, error: String(error) });
     }

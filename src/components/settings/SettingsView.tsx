@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/Panel";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { StatusDot } from "@/components/ui/StatusDot";
-import { APP_VERSION } from "@/lib/app";
+import { APP_VERSION, isAndroid } from "@/lib/app";
 import { exportBackup, importBackup } from "@/lib/backup";
 import { copyText } from "@/lib/clipboard";
 import { torLabel, torTone } from "@/lib/tor";
@@ -75,6 +75,8 @@ function installTypeLabel(type: InstallType | undefined): string {
       return "Deb package";
     case "tarball":
       return "Portable tarball";
+    case "android":
+      return "Android APK";
     default:
       return "Unknown";
   }
@@ -313,7 +315,9 @@ export function SettingsView({
 
       <Panel
         title="Runtime"
-        description="Bundled components used by OnionHoster. Repair only copies files; it does not install distro packages."
+        description={isAndroid
+          ? "Android-native Tor and cloudflared, bundled with this APK."
+          : "Bundled components used by OnionHoster. Repair only copies files; it does not install distro packages."}
         actions={
           <Button
             variant="secondary"
@@ -363,7 +367,7 @@ export function SettingsView({
 
       <Panel
         title="Updates"
-        description="Check GitHub releases for a signed OnionHoster update."
+        description={isAndroid ? "Check GitHub releases for a new Android APK." : "Check GitHub releases for a signed OnionHoster update."}
         actions={
           <Button
             variant="secondary"
@@ -408,10 +412,11 @@ export function SettingsView({
                   You are running {updateAvailable.currentVersion}.
                   {runtimeStatus?.installType === "appimage"
                     ? " The update is verified with the OnionHoster signing key before installation."
+                    : isAndroid ? " Download the APK and open it. Android checks the signing key when replacing this app."
                     : " Copy the command below and run it in a terminal to update."}
                 </p>
               </div>
-              {runtimeStatus?.installType === "appimage" ? (
+              {runtimeStatus?.installType === "appimage" || isAndroid ? (
                 <Button
                   variant="primary"
                   size="sm"
@@ -423,7 +428,7 @@ export function SettingsView({
                     ? updateProgress === null
                       ? "Installing"
                       : `${updateProgress}%`
-                    : "Install update"}
+                    : isAndroid ? "Download APK" : "Install update"}
                 </Button>
               ) : null}
             </div>
@@ -452,7 +457,9 @@ export function SettingsView({
 
         <p className="mt-3 text-[11px] leading-4 text-faint">
           Update checks and downloads use a normal HTTPS connection to GitHub.
-          Downloaded updates are rejected if their signature does not match.
+          {isAndroid
+            ? " Keep the same signing key across releases so Android can install updates without removing app data."
+            : " Downloaded updates are rejected if their signature does not match."}
         </p>
       </Panel>
 
@@ -549,7 +556,7 @@ export function SettingsView({
 
       <Panel
         title="Backup & restore"
-        description="Move your onion addresses and service settings to another machine."
+        description="Move your onion addresses and service settings to another device."
       >
         <div className="space-y-4">
           <div className="flex gap-2.5 rounded-lg border border-line bg-bg p-3">
@@ -730,7 +737,7 @@ export function SettingsView({
         </div>
 
         <p className="mt-4 text-xs leading-5 text-muted">
-          A local desktop control panel for publishing local sites and TCP services
+          A local control panel for publishing local sites and TCP services
           through Tor.
         </p>
 
@@ -749,7 +756,7 @@ export function SettingsView({
           </div>
           <div className="flex items-baseline justify-between gap-4">
             <span className="text-faint">Platform</span>
-            <span className="truncate text-muted">Linux preview</span>
+            <span className="truncate text-muted">{isAndroid ? "Android" : "Linux stable"}</span>
           </div>
         </div>
 

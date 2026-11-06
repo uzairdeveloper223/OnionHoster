@@ -111,7 +111,7 @@ export function ServicesView() {
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-7">
       <div className="mb-5 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <h2 className="text-sm font-medium text-ink">All services</h2>
           <span className="rounded-full border border-line px-2 py-0.5 font-mono text-[10px] text-faint">
             {services.length}
@@ -145,7 +145,7 @@ export function ServicesView() {
       ) : null}
 
       {!hydrated ? (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {[0, 1].map((index) => (
             <div
               key={index}
@@ -175,7 +175,7 @@ export function ServicesView() {
               <p className="mt-3 font-mono text-[11px] text-faint">
                 {isTauri
                   ? "Keys are stored locally and addresses survive restarts."
-                  : "The service runtime is only available in the desktop app."}
+                  : "The service runtime is only available in the installed app."}
               </p>
             </div>
           </section>
@@ -200,7 +200,7 @@ export function ServicesView() {
           </div>
         </>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {services.map((service) => (
             <ServiceCard
               key={service.id}

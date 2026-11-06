@@ -155,7 +155,7 @@ export const useTorStore = create<TorStore>((set, get) => ({
       set((state) => ({
         logs: [
           ...state.logs,
-          localLog("warn", "The Tor runtime is only available in the desktop app."),
+          localLog("warn", "The Tor runtime is only available in the installed app."),
         ].slice(-500),
       }));
       return;

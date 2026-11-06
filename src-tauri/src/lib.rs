@@ -3,6 +3,8 @@ mod chat_server;
 mod community;
 mod default_page;
 mod file_server;
+#[cfg(target_os = "android")]
+mod mobile;
 mod ports;
 mod proxy;
 mod runtime;
@@ -25,16 +27,25 @@ pub fn run() {
     let shutdown_manager = manager.clone();
     let listener_manager = manager.clone();
 
-    tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
+    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+    #[cfg(not(target_os = "android"))]
+    let builder = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_process::init());
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(mobile::init());
+
+    builder
         .setup(move |app| {
+            #[cfg(not(target_os = "android"))]
             if let Some(window) = app.get_webview_window("main")
                 && let Some(icon) = app.default_window_icon()
             {
                 let _ = window.set_icon(icon.clone());
             }
+
+            #[cfg(target_os = "android")]
+            mobile::set_app_handle(app.handle().clone());
 
             let services =
                 Arc::new(ServiceManager::new(app.handle()).map_err(std::io::Error::other)?);
@@ -103,6 +114,11 @@ pub fn run() {
             tunnels::stop_tunnel,
             backup::export_backup,
             backup::import_backup,
+            runtime::open_android_release,
+            runtime::get_android_update,
+            runtime::pick_android_source,
+            runtime::discard_android_source,
+            backup::export_client_key,
         ])
         .build(tauri::generate_context!())
         .unwrap_or_else(|error| {

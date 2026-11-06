@@ -514,6 +514,10 @@ impl ServiceManager {
         if remove_community_data {
             let _ = community::remove_data_dir(&self.community_dir(id));
         }
+        #[cfg(target_os = "android")]
+        if let ServiceSource::Static { root, .. } = &record.source {
+            let _ = crate::mobile::discard_source(app, root);
+        }
         let _ = app.emit(EVENT_SERVICE_DELETED, ServiceDeleted { id: id.to_string() });
         self.log(app, id, "info", "Service deleted.");
         Ok(())

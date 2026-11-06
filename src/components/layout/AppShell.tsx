@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Topbar } from "@/components/layout/Topbar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { UpdateBanner } from "@/components/layout/UpdateBanner";
+import { MobileNav } from "@/components/layout/MobileNav";
 import type { Theme, View } from "@/types";
 
 const viewMeta: Record<View, { title: string; subtitle: string }> = {
@@ -37,7 +38,7 @@ export function AppShell({
   children: ReactNode;
 }) {
   return (
-    <div className="flex h-screen overflow-hidden bg-bg text-ink">
+    <div className="app-shell flex h-dvh overflow-hidden bg-bg text-ink">
       <Sidebar
         view={view}
         onViewChange={onViewChange}
@@ -48,6 +49,7 @@ export function AppShell({
         <Topbar title={viewMeta[view].title} subtitle={viewMeta[view].subtitle} />
         <UpdateBanner />
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
+        <MobileNav view={view} onViewChange={onViewChange} />
       </div>
     </div>
   );

@@ -44,14 +44,19 @@ pub struct RestoreSummary {
     pub created_at: u64,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn export_backup(
+    app: AppHandle,
     services: State<'_, Arc<ServiceManager>>,
     path: String,
     passphrase: String,
 ) -> Result<BackupSummary, String> {
     validate_passphrase(&passphrase)?;
-    let path = backup_path(&path);
+    let path = if path.starts_with("content://") {
+        PathBuf::from(path)
+    } else {
+        backup_path(&path)
+    };
     let records = services.backup_records();
     let backup = BackupFile {
         version: BACKUP_VERSION,
@@ -60,6 +65,17 @@ pub fn export_backup(
         services: records,
     };
     let ciphertext = encrypt_backup(&backup, &passphrase)?;
+    #[cfg(target_os = "android")]
+    if path.to_string_lossy().starts_with("content://") {
+        crate::mobile::open_document(&app, &path.to_string_lossy(), true)?
+            .write_all(&ciphertext)
+            .map_err(|error| format!("Could not write the backup document: {error}"))?;
+    } else {
+        write_private_file(&path, &ciphertext)?;
+    }
+    #[cfg(not(target_os = "android"))]
+    let _ = app;
+    #[cfg(not(target_os = "android"))]
     write_private_file(&path, &ciphertext)?;
 
     Ok(BackupSummary {
@@ -78,17 +94,22 @@ pub async fn import_backup(
     passphrase: String,
 ) -> Result<RestoreSummary, String> {
     validate_passphrase(&passphrase)?;
-    let metadata = fs::metadata(&path)
+    #[cfg(target_os = "android")]
+    let file = if path.starts_with("content://") {
+        crate::mobile::open_document(&app, &path, false)?
+    } else {
+        fs::File::open(&path).map_err(|error| format!("Could not read the backup: {error}"))?
+    };
+    #[cfg(not(target_os = "android"))]
+    let file = fs::File::open(&path)
         .map_err(|error| format!("Could not read the backup file at {path}: {error}"))?;
-    if metadata.len() > MAX_BACKUP_FILE_SIZE {
-        return Err(format!(
-            "The backup file is too large ({:.1} MB). Maximum supported size is {} MB.",
-            metadata.len() as f64 / (1024.0 * 1024.0),
-            MAX_BACKUP_FILE_SIZE / (1024 * 1024)
-        ));
+    let mut bytes = Vec::new();
+    file.take(MAX_BACKUP_FILE_SIZE + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("Could not read the backup: {error}"))?;
+    if bytes.len() as u64 > MAX_BACKUP_FILE_SIZE {
+        return Err("The backup file is too large. Maximum supported size is 100 MB.".to_string());
     }
-    let bytes = fs::read(&path)
-        .map_err(|error| format!("Could not read the backup file at {path}: {error}"))?;
     let backup = decrypt_backup(&bytes, &passphrase)?;
 
     if backup.version != BACKUP_VERSION {
@@ -122,6 +143,28 @@ fn validate_passphrase(passphrase: &str) -> Result<(), String> {
         return Err("The backup passphrase cannot be empty.".to_string());
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn export_client_key(
+    app: AppHandle,
+    path: String,
+    content: String,
+) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        if !path.starts_with("content://") || content.len() > 4096 {
+            return Err("Choose a document for the client key.".to_string());
+        }
+        crate::mobile::open_document(&app, &path, true)?
+            .write_all(content.as_bytes())
+            .map_err(|error| format!("Could not save the client key: {error}"))
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, path, content);
+        Err("Use the browser download on desktop.".to_string())
+    }
 }
 
 fn backup_path(value: &str) -> PathBuf {

@@ -45,7 +45,7 @@ export function Sidebar({
     status.state === "ready";
 
   return (
-    <aside className="flex w-[248px] shrink-0 flex-col border-r border-line bg-surface">
+    <aside className="hidden w-[248px] shrink-0 flex-col border-r border-line bg-surface md:flex">
       <div className="flex h-16 items-center gap-2.5 border-b border-line px-5">
         <div className="flex size-8 items-center justify-center rounded-lg border border-line bg-bg">
           <OnionMark className="size-5" />

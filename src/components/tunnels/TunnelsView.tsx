@@ -170,7 +170,7 @@ export function TunnelsView({ onOpenServices }: { onOpenServices: () => void }) 
       ) : null}
 
       {!hydrated || !servicesHydrated ? (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {[0, 1].map((index) => (
             <div
               key={index}
@@ -237,7 +237,7 @@ export function TunnelsView({ onOpenServices }: { onOpenServices: () => void }) 
           </div>
         </>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {tunnels.map((tunnel) => (
             <TunnelCard
               key={tunnel.id}

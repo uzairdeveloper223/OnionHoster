@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Cable,
   Check,
@@ -6,6 +6,7 @@ import {
   Copy,
   Download,
   FileText,
+  FileCode2,
   FolderOpen,
   FolderUp,
   KeyRound,
@@ -21,6 +22,9 @@ import {
 import { Button } from "@/components/ui/Button";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { copyText } from "@/lib/clipboard";
+import { isAndroid } from "@/lib/app";
+import { discardAndroidSource, pickAndroidSource, saveClientKey } from "@/lib/files";
+import { useServiceStore } from "@/stores/services";
 import {
   formatBytes,
   serviceAddress,
@@ -68,9 +72,47 @@ export function ServiceCard({
   const [copied, setCopied] = useState(false);
   const [showKeys, setShowKeys] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const updateService = useServiceStore((state) => state.update);
   const address = serviceAddress(service);
   const running = service.state === "running";
   const clientAuth = service.onion.clientAuth ?? [];
+
+  useEffect(() => {
+    if (!showKeys) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowKeys(false);
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [showKeys]);
+
+  async function replaceSite(directory: boolean) {
+    if (service.source.kind !== "static") return;
+    setImporting(true);
+    setFileError(null);
+    let path: string | null = null;
+    try {
+      path = await pickAndroidSource(directory);
+      if (!path) return;
+      await updateService(service.id, {
+        name: service.name,
+        source: { ...service.source, root: path },
+        virtualPort: service.onion.virtualPort,
+        autostart: service.autostart,
+        pow: service.onion.pow,
+        maxStreams: service.onion.maxStreams ?? undefined,
+        private: service.onion.private,
+      });
+      await discardAndroidSource(service.source.root).catch(console.error);
+    } catch (error) {
+      setFileError(String(error));
+      if (path) await discardAndroidSource(path).catch(console.error);
+    } finally {
+      setImporting(false);
+    }
+  }
 
   function authLine(auth: ClientAuth): string | null {
     return service.onion.serviceId
@@ -100,9 +142,17 @@ export function ServiceCard({
     }
   }
 
-  function downloadClientKey(auth: ClientAuth) {
+  async function downloadClientKey(auth: ClientAuth) {
     const line = authLine(auth);
     if (!line || !service.onion.serviceId) {
+      return;
+    }
+    if (isAndroid) {
+      try {
+        await saveClientKey(`${service.onion.serviceId}.auth_private`, `${line}\n`);
+      } catch (error) {
+        setFileError(String(error));
+      }
       return;
     }
     const blob = new Blob([`${line}\n`], { type: "text/plain" });
@@ -115,13 +165,13 @@ export function ServiceCard({
   }
 
   return (
-    <article className="flex flex-col rounded-xl border border-line bg-surface p-4">
+    <article className="flex min-w-0 flex-col rounded-xl border border-line bg-surface p-4">
       <header className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
           <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-line bg-bg">
             <SourceIcon service={service} />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h3 className="truncate text-[13px] font-medium text-ink">{service.name}</h3>
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               <span className="truncate font-mono text-[10px] text-faint">
@@ -191,9 +241,25 @@ export function ServiceCard({
       {service.error ? (
         <div className="mt-2 flex items-start gap-2 rounded-lg border border-line bg-bg px-2.5 py-2">
           <CircleAlert className="mt-0.5 size-3.5 shrink-0 text-ink" strokeWidth={1.6} />
-          <p className="min-w-0 break-words text-[11px] leading-4 text-muted">
+            <p className="min-w-0 wrap-anywhere text-[11px] leading-4 text-muted">
             {service.error}
           </p>
+        </div>
+      ) : null}
+
+      {fileError ? <p role="alert" className="mt-2 wrap-anywhere text-[11px] text-muted">{fileError}</p> : null}
+
+      {isAndroid && service.source.kind === "static" ? (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-faint">{importing ? "Importing site" : "Replace site"}</span>
+          <Button size="sm" variant="ghost" disabled={busy || importing || !["stopped", "error"].includes(service.state)}
+            onClick={() => void replaceSite(true)}>
+            <FolderOpen className="size-3.5" strokeWidth={1.6} /> Folder
+          </Button>
+          <Button size="sm" variant="ghost" disabled={busy || importing || !["stopped", "error"].includes(service.state)}
+            onClick={() => void replaceSite(false)}>
+            <FileCode2 className="size-3.5" strokeWidth={1.6} /> HTML file
+          </Button>
         </div>
       ) : null}
 
@@ -230,7 +296,7 @@ export function ServiceCard({
           size="sm"
           variant={running ? "secondary" : "primary"}
           className="flex-1"
-          disabled={busy}
+          disabled={busy || importing}
           onClick={running ? onStop : onStart}
         >
           {running ? (
@@ -264,7 +330,7 @@ export function ServiceCard({
         <Button
           size="icon"
           variant="ghost"
-          disabled={busy}
+          disabled={busy || importing}
           onClick={onDelete}
           aria-label="Delete service"
           title="Delete"
@@ -282,7 +348,7 @@ export function ServiceCard({
             }
           }}
         >
-          <div className="w-full max-w-lg overflow-hidden rounded-xl border border-line bg-surface shadow-2xl">
+          <div role="dialog" aria-modal="true" aria-label="Client authorization" className="w-full max-w-lg overflow-hidden rounded-xl border border-line bg-surface shadow-2xl">
             <header className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
               <div className="min-w-0">
                 <h3 className="text-[13px] font-medium text-ink">Client authorization</h3>
@@ -342,7 +408,7 @@ export function ServiceCard({
                         size="sm"
                         variant="ghost"
                         disabled={!line}
-                        onClick={() => downloadClientKey(auth)}
+                        onClick={() => void downloadClientKey(auth)}
                       >
                         <Download className="size-3.5" strokeWidth={1.6} />
                         .auth_private

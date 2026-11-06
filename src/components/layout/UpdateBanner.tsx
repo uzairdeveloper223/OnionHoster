@@ -19,8 +19,12 @@ export function UpdateBanner() {
   }
 
   const isAppImage = installType === "appimage";
+  const isAndroid = installType === "android";
 
   function subtitle(): string {
+    if (isAndroid) {
+      return `You are running ${available!.currentVersion}. Download the APK and open it to update.`;
+    }
     if (isAppImage) {
       return `You are running ${available!.currentVersion}. Updates are signature-verified before installation.`;
     }
@@ -39,7 +43,7 @@ export function UpdateBanner() {
           {error ? ` ${error}` : ""}
         </p>
       </div>
-      {isAppImage ? (
+      {isAppImage || isAndroid ? (
         <Button
           variant="primary"
           size="sm"
@@ -55,7 +59,7 @@ export function UpdateBanner() {
             ? progress === null
               ? "Installing"
               : `${progress}%`
-            : "Install update"}
+            : isAndroid ? "Download APK" : "Install update"}
         </Button>
       ) : null}
       <Button

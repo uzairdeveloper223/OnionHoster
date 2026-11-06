@@ -12,12 +12,17 @@ target/
 src-tauri/target/
 
 # Tauri generated files
-src-tauri/gen/
+src-tauri/gen/*
+!src-tauri/gen/android/
+src-tauri/gen/android/app/src/main/jniLibs/
+src-tauri/gen/android/app/tauri.properties
+src-tauri/gen/android/app/tauri.build.gradle.kts
 
 # Downloaded runtime binaries
 src-tauri/resources/tor/
 src-tauri/resources/cloudflared/
 src-tauri/resources/bin/
+src-tauri/resources/android/
 
 # Local environment and secrets
 .env
@@ -26,6 +31,8 @@ src-tauri/resources/bin/
 *.key
 *.p12
 *.pfx
+*.jks
+*.keystore
 
 # Logs and operating system files
 *.log

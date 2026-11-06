@@ -1,7 +1,7 @@
 {
   "name": "onionhoster",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,10 @@
     "fetch:tor": "bash scripts/fetch-tor.sh",
     "fetch:cloudflared": "bash scripts/fetch-cloudflared.sh",
     "fetch:runtime": "pnpm fetch:tor && pnpm fetch:cloudflared",
+    "fetch:android": "bash scripts/fetch-android-runtime.sh",
+    "android:dev": "pnpm fetch:android && tauri android dev --target aarch64",
+    "android:build": "pnpm fetch:android && tauri android build --target aarch64 --apk",
+    "android:sign": "bash scripts/sign-android.sh",
     "tauri": "tauri"
   },
   "dependencies": {

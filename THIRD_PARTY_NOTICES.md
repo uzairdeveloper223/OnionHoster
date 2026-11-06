@@ -7,7 +7,9 @@ for the full license texts shipped by each project.
 ## Bundled Tor runtime
 
 The downloaded Tor Expert Bundle is installed under `src-tauri/resources/tor/` and is
-not stored in Git.
+not stored in Git. Android uses the Android Tor Expert Bundle 16.0; its executables
+are packaged under the APK's native-library directory and its data and notices
+under `src-tauri/resources/android/`.
 
 | Component | Version | License | Upstream |
 | --- | --- | --- | --- |
@@ -18,7 +20,10 @@ not stored in Git.
 | GeoIP database | bundled with Tor | See Tor Project and MaxMind terms | https://www.torproject.org/ |
 
 The exact bundle URL and SHA-256 digest are pinned in `scripts/fetch-tor.sh`. The
-download is verified against the Tor Browser signing key with fingerprint
+Android URLs and per-architecture digests are pinned in
+`scripts/fetch-android-runtime.sh`. Both bundles include their upstream license
+texts, including those for OpenSSL, libevent, zlib, zstd, and bridge transports.
+The download is verified against the Tor Browser signing key with fingerprint
 `EF6E286DDA85EA2A4BA7DE684E2C6E8793298290`.
 
 ## Bundled cloudflared
@@ -34,6 +39,10 @@ The exact release URL and SHA-256 digest are pinned in
 `scripts/fetch-cloudflared.sh`. cloudflared is used only when the user explicitly
 starts a tunnel. OnionHoster is not affiliated with Cloudflare.
 
+Android builds compile the same cloudflared version from a checksum-pinned source
+archive using Go and the Android NDK. The source URL and digest are recorded in
+`scripts/fetch-android-runtime.sh`; the upstream license is included in the APK.
+
 ## Application framework
 
 | Component | License |
@@ -48,6 +57,8 @@ starts a tunnel. OnionHoster is not affiliated with Cloudflare.
 | clsx | MIT |
 | tailwind-merge | MIT |
 | Geist and Geist Mono | SIL Open Font License 1.1 |
+| AndroidX | Apache-2.0 |
+| Material Components for Android | Apache-2.0 |
 
 ## Distribution notes
 

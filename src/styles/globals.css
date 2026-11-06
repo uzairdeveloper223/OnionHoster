@@ -129,6 +129,44 @@
   }
 }
 
+.app-shell {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+.mobile-nav {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (max-width: 767px) {
+  .mobile-nav button {
+    min-height: 64px;
+  }
+
+  main > .mx-auto {
+    padding: 20px 16px;
+  }
+
+  button,
+  input,
+  select {
+    min-height: 40px;
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  [role="dialog"],
+  [role="alertdialog"] {
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 32px);
+    overflow-y: auto;
+  }
+}
+
 @layer components {
   .panel {
     border: 1px solid var(--line);

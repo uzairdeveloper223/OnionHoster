@@ -7,7 +7,7 @@ export interface RuntimeComponent {
   path: string | null;
 }
 
-export type InstallType = "appimage" | "deb" | "tarball";
+export type InstallType = "appimage" | "deb" | "tarball" | "android";
 
 export interface RuntimeStatus {
   appimage: boolean;

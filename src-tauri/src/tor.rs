@@ -250,6 +250,11 @@ impl TorManager {
         }
 
         self.set_status(&app, TorStatus::starting());
+        #[cfg(target_os = "android")]
+        if let Err(error) = crate::mobile::set_hosting(&app, true) {
+            self.fail(&app, generation, error.clone());
+            return Err(error);
+        }
         self.push_log(&app, "info", "Starting the Tor runtime.");
 
         let manager = self.clone();
@@ -290,6 +295,8 @@ impl TorManager {
         }
 
         if let Some(app) = app {
+            #[cfg(target_os = "android")]
+            let _ = crate::mobile::set_hosting(app, false);
             self.set_status(app, TorStatus::stopped());
             self.push_log(app, "info", "Tor stopped.");
         }
@@ -607,6 +614,9 @@ impl TorManager {
             terminate_child(&mut child);
         }
 
+        #[cfg(target_os = "android")]
+        let _ = crate::mobile::set_hosting(app, false);
+
         let mut status = self.status.lock().expect("tor status lock poisoned");
         if matches!(status.state, TorPhase::Stopped | TorPhase::Error) {
             return;
@@ -678,6 +688,8 @@ struct RuntimePaths {
 impl RuntimePaths {
     fn resolve(app: &AppHandle) -> Result<Self, String> {
         let tor_dir = crate::runtime::ensure_tor_runtime(app)?;
+        #[cfg(target_os = "android")]
+        let data = crate::mobile::runtime_paths(app)?.data_dir.join("tor");
 
         let base_dir = app
             .path()
@@ -685,7 +697,7 @@ impl RuntimePaths {
             .map_err(|error| format!("Could not resolve the application data directory: {error}"))?
             .join("tor");
 
-        Ok(Self {
+        let mut paths = Self {
             tor: tor_dir.join("tor"),
             lyrebird: tor_dir.join("lyrebird"),
             geoip: tor_dir.join("geoip"),
@@ -697,7 +709,17 @@ impl RuntimePaths {
             cookie_file: base_dir.join("data").join("control_auth_cookie"),
             lock_file: base_dir.join("tor.lock"),
             tor_dir,
-        })
+        };
+        #[cfg(target_os = "android")]
+        {
+            paths.tor = paths.tor_dir.join("libTor.so");
+            paths.lyrebird = paths.tor_dir.join("liblyrebird.so");
+            paths.geoip = data.join("geoip");
+            paths.geoip6 = data.join("geoip6");
+        }
+        // Android keeps executables in nativeLibraryDir and writable data in app storage.
+        let _ = &mut paths;
+        Ok(paths)
     }
 
     fn prepare(&self) -> Result<(), String> {
@@ -797,14 +819,15 @@ impl RuntimePaths {
             lines.push("UseBridges 1".to_string());
 
             if transports.contains("lyrebird") {
+                // Tor splits transport commands into argv; embedded quotes become part of the path.
                 lines.push(format!(
-                    "ClientTransportPlugin meek_lite,obfs4,webtunnel exec \"{}\"",
+                    "ClientTransportPlugin meek_lite,obfs4,webtunnel exec {}",
                     self.lyrebird.display()
                 ));
             }
             if transports.contains("snowflake") {
                 lines.push(format!(
-                    "ClientTransportPlugin snowflake exec \"{}\"",
+                    "ClientTransportPlugin snowflake exec {}",
                     self.lyrebird.display()
                 ));
             }
@@ -1246,7 +1269,7 @@ pub fn get_tor_logs(manager: State<'_, Arc<TorManager>>) -> Vec<TorLogEntry> {
     manager.logs()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn start_tor(
     app: AppHandle,
     manager: State<'_, Arc<TorManager>>,
@@ -1422,8 +1445,12 @@ mod tests {
         let torrc = fs::read_to_string(&paths.torrc).expect("read torrc");
 
         assert!(torrc.contains("UseBridges 1"));
-        assert!(torrc.contains("ClientTransportPlugin meek_lite,obfs4,webtunnel"));
-        assert!(torrc.contains("ClientTransportPlugin snowflake"));
+        assert!(
+            torrc.contains(
+                "ClientTransportPlugin meek_lite,obfs4,webtunnel exec /tmp/tor/lyrebird\n"
+            )
+        );
+        assert!(torrc.contains("ClientTransportPlugin snowflake exec /tmp/tor/lyrebird\n"));
         assert!(torrc.contains("Bridge obfs4 192.0.2.1:443"));
         assert!(torrc.contains("Bridge snowflake 192.0.2.2:80"));
         assert!(!torrc.contains("# ignored comment"));
